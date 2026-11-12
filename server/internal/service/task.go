@@ -1491,37 +1491,14 @@ func (s *TaskService) enqueueMentionTaskWithCommentPlan(ctx context.Context, iss
 		slog.Warn("mention task enqueue refused: attribution fail-closed", "issue_id", util.UUIDToString(issue.ID), "agent_id", util.UUIDToString(agentID))
 		return db.AgentTaskQueue{}, err
 	}
-	originatorUserID := attr.UserID
-	runtimeMCPOverlay := s.buildRuntimeMCPOverlay(ctx, originatorUserID, agent)
-	attrSource, attrDelegatedFrom, attrEvidenceKind, attrEvidenceRef := attributionCreateParams(attr)
-	params := db.CreateAgentTaskParams{
-		ID:                   dbid.NewV7(),
-		AgentID:              agentID,
-		RuntimeID:            agent.RuntimeID,
-		IssueID:              issue.ID,
-		Priority:             priorityToInt(issue.Priority),
-		TriggerCommentID:     triggerCommentID,
-		CoalescedCommentIds:  coalescedCommentIDs,
-		TriggerSummary:       s.buildCommentTriggerSummary(ctx, issue.WorkspaceID, triggerCommentID),
-		IsLeaderTask:         pgtype.Bool{Bool: isLeader, Valid: isLeader},
-		ForceFreshSession:    pgtype.Bool{Bool: forceFreshSession, Valid: forceFreshSession},
-		HandoffNote:          pgtype.Text{String: handoffNote, Valid: handoffNote != ""},
-		SquadID:              squadID,
-		OriginatorUserID:     originatorUserID,
-		AccountableUserID:    attr.AccountableUserID,
-		RuleVersionID:        attr.RuleVersionID,
-		RerunOfTaskID:        rerunOfTaskID,
-		FreshRerun:           pgtype.Bool{Bool: freshRerun, Valid: true},
-		RuntimeMcpOverlay:    runtimeMCPOverlay.Overlay,
-		RuntimeConnectedApps: runtimeMCPOverlay.ConnectedApps,
-		OriginatorSource:     attrSource,
-		DelegatedFromTaskID:  attrDelegatedFrom,
-		TriggerEvidenceKind:  attrEvidenceKind,
-		TriggerEvidenceRefID: attrEvidenceRef,
-		// Stamp the reviewed head so dedup can distinguish this run's target
-		// from a later request against a new HEAD (TEN-356).
-		HeadSha: headShaText(s.ResolveIssueReviewSHA(ctx, issue.ID)),
-	}
+	params := s.mentionTaskParams(ctx, issue, agent, triggerCommentID, attr)
+	params.CoalescedCommentIds = coalescedCommentIDs
+	params.IsLeaderTask = pgtype.Bool{Bool: isLeader, Valid: isLeader}
+	params.ForceFreshSession = pgtype.Bool{Bool: forceFreshSession, Valid: forceFreshSession}
+	params.HandoffNote = pgtype.Text{String: handoffNote, Valid: handoffNote != ""}
+	params.SquadID = squadID
+	params.RerunOfTaskID = rerunOfTaskID
+	params.FreshRerun = pgtype.Bool{Bool: freshRerun, Valid: true}
 	var task db.AgentTaskQueue
 	if workflowHandoff {
 		task, err = s.createWorkflowSquadHandoffTask(ctx, issue, params)
@@ -5186,6 +5163,12 @@ func (s *TaskService) FailTaskWithTransition(ctx context.Context, taskID pgtype.
 			return err
 		}
 		task = t
+
+		if failureReason == taskfailure.ReasonAgentProviderQuotaLimit.String() {
+			if err := ExhaustKiroCredential(ctx, qtx, taskID); err != nil {
+				return fmt.Errorf("record exhausted Kiro credential: %w", err)
+			}
+		}
 
 		// Atomic with the status flip, same as the completion path. A failed
 		// coordinator that already received the recovery comment has consumed

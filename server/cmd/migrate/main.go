@@ -140,6 +140,17 @@ var pgBigmOperatorClass = extensionOperatorClass{
 // they are still pending: a fresh self-hosted install, which is exactly where an
 // interrupted build would otherwise leave a permanently unusable index.
 var concurrentIndexCleanups = map[string]string{
+	"637_kiro_credential_pool_workspace":  "kiro_credential_pool_workspace",
+	"638_kiro_credential_member_agent":    "kiro_credential_member_agent",
+	"639_kiro_credential_member_position": "kiro_credential_member_position",
+	"640_kiro_credential_assignment_task": "kiro_credential_assignment_task",
+	"641_kiro_credential_exhausted":       "kiro_credential_exhausted",
+
+	"635_worker_pool_request":                                   "worker_pool_request",
+	"634_worker_pool_member_position":                           "worker_pool_member_position",
+	"633_worker_pool_member_agent":                              "worker_pool_member_agent",
+	"632_worker_pool_name":                                      "worker_pool_name",
+	"631_worker_pool_id":                                        "worker_pool_id",
 	"628_app_action_request_chat_idx":                           "idx_app_action_request_chat",
 	"627_app_tool_call_issue_idx":                               "idx_app_tool_call_issue",
 	"626_app_action_request_task_idx":                           "idx_app_action_request_task",

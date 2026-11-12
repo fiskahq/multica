@@ -2282,6 +2282,8 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 					r.Put("/", h.UpdateSquad)
 					r.Delete("/", h.DeleteSquad)
 					r.Get("/members", h.ListSquadMembers)
+					r.Get("/pools", h.ListWorkerPools)
+					r.Put("/pools/{pool}", h.PutWorkerPool)
 					r.Get("/members/status", h.ListSquadMemberStatus)
 					r.Post("/members", h.AddSquadMember)
 					r.Delete("/members", h.RemoveSquadMember)
@@ -2291,6 +2293,7 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 
 			// Squad leader evaluation (writes to activity_log)
 			r.Post("/api/issues/{id}/squad-evaluated", h.RecordSquadLeaderEvaluation)
+			r.Post("/api/issues/{id}/pool-delegations", h.DelegateWorkerPool)
 
 			// Autopilots
 			r.Route("/api/autopilots", func(r chi.Router) {

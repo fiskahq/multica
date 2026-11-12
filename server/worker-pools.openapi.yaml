@@ -1,0 +1,177 @@
+openapi: 3.0.3
+info:
+  title: Multica worker pool extension
+  version: 1.0.0
+  description: >-
+    Internal authenticated API used by the Multica CLI. Workspace membership and
+    X-Workspace-ID select the tenant. Delegation requires a running squad leader
+    task token; agent and task identity come from authentication middleware.
+security:
+  - bearerAuth: []
+paths:
+  /api/squads/{id}/pools:
+    parameters:
+      - {$ref: '#/components/parameters/id'}
+      - {$ref: '#/components/parameters/workspace'}
+    get:
+      operationId: listWorkerPools
+      responses:
+        '200':
+          description: Ordered pool configurations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, name, last_position, members]
+                  properties:
+                    id: {type: string, format: uuid}
+                    name: {type: string}
+                    last_position: {type: integer, minimum: -1}
+                    members:
+                      type: array
+                      items: {$ref: '#/components/schemas/PoolMember'}
+        default: {$ref: '#/components/responses/Error'}
+  /api/squads/{id}/pools/{pool}:
+    parameters:
+      - {$ref: '#/components/parameters/id'}
+      - {$ref: '#/components/parameters/workspace'}
+      - name: pool
+        in: path
+        required: true
+        schema: {$ref: '#/components/schemas/Label'}
+    put:
+      operationId: configureWorkerPool
+      description: >-
+        Human squad managers replace ordered membership atomically. Agents cannot
+        configure pools. Members must belong to the squad and cannot be its leader.
+        An empty array disables dispatch. Existing cursor position is preserved.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [members]
+              properties:
+                members:
+                  type: array
+                  maxItems: 64
+                  items: {$ref: '#/components/schemas/PoolMember'}
+      responses:
+        '200':
+          description: Saved pool
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, name]
+                properties:
+                  id: {type: string, format: uuid}
+                  name: {type: string}
+        default: {$ref: '#/components/responses/Error'}
+  /api/issues/{id}/pool-delegations:
+    parameters:
+      - {$ref: '#/components/parameters/id'}
+      - {$ref: '#/components/parameters/workspace'}
+    post:
+      operationId: delegateWorkerPool
+      description: >-
+        Atomically selects the next eligible worker, creates a comment and native
+        deferred task, and advances the pool cursor. Busy workers queue work.
+        Ineligible workers are skipped. The request_id is unique within a pool.
+        Retry identical input with the same ID after timeouts or server errors.
+        Replays do not advance the cursor. Human direct assignments and native
+        task retries are outside pool rotation. Guarantees assignment, not
+        exactly-once execution of external actions.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pool, request_id, instructions]
+              properties:
+                pool: {$ref: '#/components/schemas/Label'}
+                request_id: {type: string, minLength: 1, maxLength: 128}
+                instructions: {type: string, minLength: 1, maxLength: 32000}
+                capabilities:
+                  type: array
+                  maxItems: 32
+                  uniqueItems: true
+                  default: []
+                  items: {$ref: '#/components/schemas/Label'}
+      responses:
+        '201':
+          description: Committed delegation
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Delegation'}
+        '200':
+          description: Previously committed delegation, replayed is true
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Delegation'}
+        '409':
+          description: >-
+            No eligible worker, inactive leader, no_action evaluation, conflicting
+            request ID, or task admission failure. No new assignment commits.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        default: {$ref: '#/components/responses/Error'}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer}
+  parameters:
+    id:
+      name: id
+      in: path
+      required: true
+      description: UUID; issue routes also accept the native human-readable issue key.
+      schema: {type: string}
+    workspace:
+      name: X-Workspace-ID
+      in: header
+      required: true
+      schema: {type: string, format: uuid}
+  responses:
+    Error:
+      description: Validation, authentication, authorization or server error
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+  schemas:
+    Label:
+      type: string
+      pattern: '^[a-z][a-z0-9_-]{0,63}$'
+    PoolMember:
+      type: object
+      required: [agent_id]
+      properties:
+        agent_id: {type: string, format: uuid}
+        pool_id: {type: string, format: uuid, readOnly: true}
+        position: {type: integer, readOnly: true}
+        enabled: {type: boolean, default: true}
+        capabilities:
+          type: array
+          maxItems: 32
+          uniqueItems: true
+          default: []
+          items: {$ref: '#/components/schemas/Label'}
+    Delegation:
+      type: object
+      required: [pool_id, request_id, agent_id, task_id, comment_id, replayed]
+      properties:
+        pool_id: {type: string, format: uuid}
+        request_id: {type: string}
+        agent_id: {type: string, format: uuid}
+        task_id: {type: string, format: uuid}
+        comment_id: {type: string, format: uuid}
+        replayed: {type: boolean}
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: {type: string}

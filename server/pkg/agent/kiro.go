@@ -23,7 +23,7 @@ var kiroReaderDrainGrace = 2 * time.Second
 
 // kiroBlockedArgs are flags hardcoded by the daemon that must not be
 // overridden by user-configured custom_args. `acp` is the protocol subcommand,
-// and --trust-all-tools covers Kiro's CLI-level tool gate while
+// and --trust-all-tools covers legacy engines' CLI-level tool gate while
 // hermesClient handles ACP session/request_permission auto-approval. In Kiro
 // CLI 2.1.1, `-a` is short for --trust-all-tools, not --agent; --agent remains
 // allowed so users can select a custom Kiro agent.
@@ -139,7 +139,21 @@ func (b *kiroBackend) Execute(ctx context.Context, prompt string, opts ExecOptio
 		blockedArgs = maps.Clone(kiroBlockedArgs)
 		blockedArgs["--effort"] = blockedWithValue
 	}
-	kiroArgs := append([]string{"acp", "--trust-all-tools"}, filterCustomArgs(opts.CustomArgs, blockedArgs, b.cfg.Logger)...)
+	customArgs := filterCustomArgs(opts.CustomArgs, blockedArgs, b.cfg.Logger)
+	engine := ""
+	for i, arg := range customArgs {
+		if arg == "--agent-engine" && i+1 < len(customArgs) {
+			engine = customArgs[i+1]
+		} else if strings.HasPrefix(arg, "--agent-engine=") {
+			engine = strings.TrimPrefix(arg, "--agent-engine=")
+		}
+	}
+	kiroArgs := []string{"acp"}
+	// v3 rejects CLI trust flags; tool permissions use the ACP handler instead.
+	if engine != "v3" {
+		kiroArgs = append(kiroArgs, "--trust-all-tools")
+	}
+	kiroArgs = append(kiroArgs, customArgs...)
 	cmd := b.cfg.commandAt(execPath).exec(runCtx, kiroArgs...)
 	hideAgentWindow(cmd)
 	b.cfg.logAgentCommand(cmd, newAgentCommandLogArgs(kiroArgs, trustAgentCommandPositional(0, "acp")))
@@ -318,6 +332,7 @@ func (b *kiroBackend) Execute(ctx context.Context, prompt string, opts ExecOptio
 		finalStatus := "completed"
 		var finalError string
 		var sessionID string
+		var sessionResult json.RawMessage
 		// Set when the ACP runtime refuses the session we asked to
 		// resume. Only that is curable by starting a fresh session, so
 		// handshake/network failures below must leave it false.
@@ -377,6 +392,7 @@ func (b *kiroBackend) Execute(ctx context.Context, prompt string, opts ExecOptio
 			// too means a future kiro that DOES return a different id on
 			// silent state reset is handled the same way as hermes/kimi.
 			var changed bool
+			sessionResult = result
 			sessionID, changed = resolveResumedSessionID(opts.ResumeSessionID, result)
 			if changed {
 				b.cfg.Logger.Warn("agent returned a different session id on resume — original was likely lost; continuing with the new id",
@@ -400,6 +416,7 @@ func (b *kiroBackend) Execute(ctx context.Context, prompt string, opts ExecOptio
 				return
 			}
 			sessionID = extractACPSessionID(result)
+			sessionResult = result
 			if sessionID == "" {
 				finalStatus = "failed"
 				finalError = "kiro session/new returned no session ID"
@@ -424,10 +441,7 @@ func (b *kiroBackend) Execute(ctx context.Context, prompt string, opts ExecOptio
 			modelToSet = effectiveModel
 		}
 		if modelToSet != "" {
-			if _, err := c.request(runCtx, "session/set_model", map[string]any{
-				"sessionId": sessionID,
-				"modelId":   modelToSet,
-			}); err != nil {
+			if err := selectKiroSessionModel(runCtx, c.request, sessionID, modelToSet, sessionResult, engine == "v3"); err != nil {
 				b.cfg.Logger.Warn("kiro set_session_model failed", "error", err, "requested_model", modelToSet)
 				finalStatus = "failed"
 				finalError = fmt.Sprintf("kiro could not switch to model %q: %v", modelToSet, err)

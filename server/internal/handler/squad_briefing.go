@@ -279,7 +279,36 @@ func squadOperatingProtocolFor(ownsIssueStatus bool, workflow leaderWorkflow) st
 // steer adds the rule for steering a running worker; see squadSteerRule.
 func buildSquadLeaderBriefing(ctx context.Context, q *db.Queries, squad db.Squad, ownsIssueStatus bool, workflow leaderWorkflow, steer bool) string {
 	var sb strings.Builder
-	sb.WriteString(squadOperatingProtocolFor(ownsIssueStatus, workflow))
+	protocolText := squadOperatingProtocolFor(ownsIssueStatus, workflow)
+	pools, poolErr := q.ListWorkerPools(ctx, db.ListWorkerPoolsParams{WorkspaceID: squad.WorkspaceID, SquadID: squad.ID})
+	if poolErr == nil && len(pools) > 0 {
+		protocolText = strings.ReplaceAll(protocolText, "must delegate X to the right squad member by @mention", "must delegate X through the configured worker pool")
+		start := strings.Index(protocolText, "1. **Read the issue**")
+		end := strings.Index(protocolText, "3. **Record your evaluation.**")
+		protocolText = protocolText[:start] + `1. **Read the issue** and choose the work and required capabilities.
+2. **Delegate through a worker pool.** Run:
+   ` + "`multica squad delegate <issue-id> --pool <name> --request-id <stable-id> --instructions <work> [--capability <label>]`" + `
+   Reuse the SAME request-id and input when retrying a delegation. Use a new ID only for new work.
+   The server selects the next eligible worker, posts the delegation comment and queues its task atomically.
+   Do not post another delegation comment or directly mention/assign a pooled worker; those routes are blocked.
+   A successful response contains the selected agent_id, task_id and comment_id. Stop after recording activity.
+   If no worker is eligible, report the failure instead of bypassing the pool.
+` + protocolText[end:]
+		protocolText += "\n\n## Worker pools\n"
+		for _, pool := range pools {
+			protocolText += "- `" + pool.Name + "`\n"
+			members, err := q.ListWorkerPoolMembers(ctx, pool.ID)
+			if err != nil {
+				continue
+			}
+			for _, member := range members {
+				if member.Enabled {
+					protocolText += "  - " + util.UUIDToString(member.AgentID) + ": " + strings.Join(member.Capabilities, ", ") + "\n"
+				}
+			}
+		}
+	}
+	sb.WriteString(protocolText)
 	if steer {
 		sb.WriteString("\n")
 		sb.WriteString(squadSteerRule)

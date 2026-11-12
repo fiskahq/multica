@@ -1202,6 +1202,27 @@ type IssueWorkflow struct {
 	OwnerID          pgtype.UUID        `json:"owner_id"`
 }
 
+type KiroCredentialAssignment struct {
+	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
+	TaskID         pgtype.UUID        `json:"task_id"`
+	SourceAgentID  pgtype.UUID        `json:"source_agent_id"`
+	KeyFingerprint string             `json:"key_fingerprint"`
+	QuotaExhausted bool               `json:"quota_exhausted"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+type KiroCredentialMember struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	AgentID     pgtype.UUID `json:"agent_id"`
+	Position    int32       `json:"position"`
+	Enabled     bool        `json:"enabled"`
+}
+
+type KiroCredentialPool struct {
+	WorkspaceID  pgtype.UUID `json:"workspace_id"`
+	LastPosition int32       `json:"last_position"`
+}
+
 type LarkBindingToken struct {
 	TokenHash      string             `json:"token_hash"`
 	WorkspaceID    pgtype.UUID        `json:"workspace_id"`
@@ -1892,6 +1913,34 @@ type WecomInstallSession struct {
 	ErrorMessage       pgtype.Text        `json:"error_message"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
+type WorkerPool struct {
+	ID           pgtype.UUID `json:"id"`
+	WorkspaceID  pgtype.UUID `json:"workspace_id"`
+	SquadID      pgtype.UUID `json:"squad_id"`
+	Name         string      `json:"name"`
+	LastPosition int32       `json:"last_position"`
+}
+
+type WorkerPoolDelegation struct {
+	PoolID       pgtype.UUID        `json:"pool_id"`
+	RequestID    string             `json:"request_id"`
+	RequestHash  string             `json:"request_hash"`
+	LeaderTaskID pgtype.UUID        `json:"leader_task_id"`
+	IssueID      pgtype.UUID        `json:"issue_id"`
+	AgentID      pgtype.UUID        `json:"agent_id"`
+	TaskID       pgtype.UUID        `json:"task_id"`
+	CommentID    pgtype.UUID        `json:"comment_id"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+type WorkerPoolMember struct {
+	PoolID       pgtype.UUID `json:"pool_id"`
+	AgentID      pgtype.UUID `json:"agent_id"`
+	Position     int32       `json:"position"`
+	Capabilities []string    `json:"capabilities"`
+	Enabled      bool        `json:"enabled"`
 }
 
 type Workspace struct {
