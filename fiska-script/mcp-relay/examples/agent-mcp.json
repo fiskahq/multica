@@ -1,0 +1,101 @@
+{
+  "agents": {
+    "Mika": {
+      "servers": ["factory-jira", "factory-confluence"],
+      "purpose": "Read linked Jira requirements and Confluence specifications, standards and runbooks for the assigned work."
+    },
+    "sdm-manager": {
+      "servers": ["factory-jira", "factory-confluence"],
+      "purpose": "Read management context, requirements, decisions and linked work for issue intake and coordination."
+    },
+    "sdm-partner-liaison": {
+      "servers": ["factory-jira", "factory-confluence"],
+      "purpose": "Read product, support and billing evidence for accurate partner correspondence."
+    },
+    "sdm-people-notes": {
+      "servers": ["factory-jira"],
+      "purpose": "Read only the relevant work items for the person and review period named in the assigned request."
+    },
+    "sdm-rnd-planner": {
+      "servers": ["factory-jira", "factory-confluence"],
+      "purpose": "Read prior research, requirements, technical constraints and roadmap dependencies."
+    },
+    "sdm-finance": {
+      "servers": ["factory-confluence"],
+      "purpose": "Read linked contract, purchasing and budget context for supplied invoices and cost planning."
+    },
+    "development-lead": {
+      "servers": ["factory-jira", "factory-confluence"],
+      "purpose": "Coordinates native Multica engineering delivery and verifies outcomes. Read-only Jira and Confluence context."
+    },
+    "development-planner": {
+      "servers": ["factory-jira", "factory-confluence"],
+      "purpose": "Turns requirements into a concise implementable plan and acceptance criteria. Read-only Jira and Confluence context."
+    },
+    "development-builder": {
+      "servers": ["factory-jira", "factory-confluence"],
+      "purpose": "Implements and integrates changes in the assigned task worktree. Read-only Jira and Confluence context."
+    },
+    "development-reviewer": {
+      "servers": ["factory-jira", "factory-confluence"],
+      "purpose": "Independently reviews exact candidates for correctness, security and data integrity. Read-only Jira and Confluence context."
+    },
+    "development-practices": {
+      "servers": ["factory-jira", "factory-confluence"],
+      "purpose": "Reviews architecture and established repository practices when needed. Read-only Jira and Confluence context."
+    },
+    "development-qa": {
+      "servers": ["factory-jira", "factory-confluence"],
+      "purpose": "Tests acceptance behavior on the exact candidate and reports coverage limits. Read-only Jira and Confluence context."
+    },
+    "development-researcher": {
+      "servers": [
+        "factory-jira",
+        "factory-confluence",
+        "factory-cloudflare-fiska-com",
+        "factory-cloudflare-fiska-net",
+        "factory-cloudflare-fiska-io",
+        "factory-cloudflare-integratedcommerce-io"
+      ],
+      "purpose": "Investigates bounded technical and infrastructure questions with primary evidence. Read-only Jira and Confluence context. Read-only Cloudflare zone and DNS evidence."
+    },
+    "development-designer": {
+      "servers": ["factory-jira", "factory-confluence"],
+      "purpose": "Designs UI and UX within the app's existing patterns and documents each decision. Read-only Jira and Confluence context."
+    },
+    "development-release": {
+      "servers": ["factory-jira", "factory-confluence", "factory-jira-triage"],
+      "purpose": "Prepares delivery packets, creates or updates PRs, records delivery changes in Jira and maintains Confluence documentation using the relay's configured read/write permissions."
+    },
+    "jira-triage-deduplicator": {
+      "servers": ["factory-jira", "factory-confluence"],
+      "purpose": "Searches for duplicates, related reports and regressions; recommends a canonical Jira issue with evidence."
+    },
+    "jira-triage-curator": {
+      "servers": ["factory-jira", "factory-confluence", "factory-jira-triage"],
+      "purpose": "Finds or creates the appropriate Jira issue, preserves duplicate evidence and verifies issue links and routing."
+    },
+    "jira-triage-reproducer": {
+      "servers": ["factory-jira", "factory-confluence"],
+      "purpose": "Attempts an isolated reproduction and records steps, environment, actual results and honest coverage limits."
+    },
+    "jira-triage-requirements": {
+      "servers": ["factory-jira", "factory-confluence", "factory-jira-triage"],
+      "purpose": "Refines Jira requirements, scope and acceptance criteria from verified intent and reproduction evidence."
+    },
+    "jira-triage-reviewer": {
+      "servers": ["factory-jira", "factory-confluence"],
+      "purpose": "Independently checks ticket quality, evidence and readiness; returns defects for correction before completing triage."
+    }
+  },
+  "unavailable": [
+    {
+      "service": "GitHub",
+      "reason": "Both 1Password tokens returned HTTP 401; no GitHub MCP server is registered."
+    },
+    {
+      "service": "Factory database broker and guarded Mermig runner",
+      "reason": "These require factory request/station context and are not standalone relay integrations."
+    }
+  ]
+}

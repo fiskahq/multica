@@ -48,3 +48,6 @@ coverage
 /.github/
 /deploy/
 /scripts/
+
+# Local setup state and credentials are never part of the app build context.
+/fiska-script/

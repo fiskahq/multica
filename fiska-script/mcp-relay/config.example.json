@@ -1,0 +1,16 @@
+{
+  "http": {
+    "host": "0.0.0.0",
+    "port": 8080,
+    "token": { "file": "/run/relay-secrets/relay-token" },
+    "allowedOrigins": []
+  },
+  "dataDir": "/data",
+  "google": {
+    "credentialsFile": "/run/relay-secrets/google-adc.json",
+    "drive": true,
+    "gmail": { "query": "in:inbox", "pollSeconds": 60, "pagesPerPoll": 5 }
+  },
+  "upstreams": [],
+  "commands": []
+}

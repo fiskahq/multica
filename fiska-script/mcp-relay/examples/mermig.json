@@ -1,0 +1,63 @@
+{
+  "commands": [
+    {
+      "name": "mermig_plan_dev",
+      "description": "Plan fiska_demographics migrations against dev. Requires the configured migration role. Does not apply migrations. Reports the checkout and target database.",
+      "command": "/usr/local/bin/mermig",
+      "args": [
+        "--env",
+        "dev",
+        "--path",
+        "/workspace/tools/mermig/src/Config.toml",
+        "--service",
+        "fiska_demographics",
+        "--action",
+        "update_all",
+        "--plan",
+        "--output",
+        "json"
+      ],
+      "cwd": "/workspace",
+      "env": {
+        "MERMIG_REPO_ROOT": { "file": "/run/relay-secrets/mermig-repo-root" },
+        "MERMIG_AWS_FROM_ENV": {
+          "file": "/run/relay-secrets/mermig-aws-from-env"
+        },
+        "AWS_ACCESS_KEY_ID": {
+          "file": "/run/relay-secrets/mermig-aws-access-key-id"
+        },
+        "AWS_SECRET_ACCESS_KEY": {
+          "file": "/run/relay-secrets/mermig-aws-secret-access-key"
+        },
+        "AWS_SESSION_TOKEN": {
+          "file": "/run/relay-secrets/mermig-aws-session-token"
+        },
+        "DOTNET_CLI_HOME": { "file": "/run/relay-secrets/dotnet-cli-home" },
+        "NUGET_PACKAGES": { "file": "/run/relay-secrets/nuget-packages" }
+      },
+      "timeoutMs": 600000,
+      "readOnly": true
+    },
+    {
+      "name": "mermig_check",
+      "description": "Check model/migration drift for merchant_application_portal in the configured checkout.",
+      "command": "/usr/local/bin/mermig",
+      "args": [
+        "--path",
+        "/workspace/tools/mermig/src/Config.toml",
+        "--service",
+        "merchant_application_portal",
+        "--action",
+        "check"
+      ],
+      "cwd": "/workspace",
+      "env": {
+        "MERMIG_REPO_ROOT": { "file": "/run/relay-secrets/mermig-repo-root" },
+        "DOTNET_CLI_HOME": { "file": "/run/relay-secrets/dotnet-cli-home" },
+        "NUGET_PACKAGES": { "file": "/run/relay-secrets/nuget-packages" }
+      },
+      "timeoutMs": 600000,
+      "readOnly": true
+    }
+  ]
+}

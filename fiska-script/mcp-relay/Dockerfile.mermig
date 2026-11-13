@@ -1,0 +1,17 @@
+# Build the base relay and the factory's station-mysql image first.
+ARG RELAY_IMAGE=fiska-mcp-relay:local
+ARG MERMIG_IMAGE=software-factory-v3-station-mysql:local
+FROM ${RELAY_IMAGE} AS relay
+FROM ${MERMIG_IMAGE}
+USER root
+COPY --from=relay /usr/local/bin/node /usr/local/bin/node
+COPY --from=relay --chown=node:node /app /opt/mcp-relay
+RUN mkdir -p /data && chown node:node /data
+ENV NODE_ENV=production RELAY_CONFIG=/app/config.json
+WORKDIR /opt/mcp-relay
+USER node
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+ENTRYPOINT []
+CMD ["node", "dist/src/main.js"]

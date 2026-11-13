@@ -1,0 +1,41 @@
+ARG DOCKER_VERSION=29.9.3
+FROM docker:${DOCKER_VERSION}-cli AS docker_cli
+FROM multica_backend AS multica
+
+FROM node:22-bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates curl git gh openssh-client python3 make g++ ripgrep unzip \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /workspaces /home/node/.local/bin /opt/agent-tools \
+    && chown -R node:node /workspaces /home/node /opt/agent-tools
+COPY --from=multica /app/multica /usr/local/bin/multica
+COPY --from=multica /app/LICENSE /app/NOTICE /usr/share/doc/multica/
+COPY --from=docker_cli /usr/local/bin/docker /usr/local/bin/docker
+COPY --from=docker_cli /usr/local/libexec/docker/cli-plugins/ /usr/local/libexec/docker/cli-plugins/
+
+ARG KIRO_VERSION=latest
+RUN curl --fail --show-error --silent --location --retry 3 \
+      https://cli.kiro.dev/install -o /tmp/install-kiro.sh \
+    && if [ "$KIRO_VERSION" = latest ]; then set --; else set -- --version "$KIRO_VERSION"; fi \
+    && Q_INSTALL_GLOBAL=1 bash /tmp/install-kiro.sh --force --no-modify-path "$@" \
+    && rm /tmp/install-kiro.sh
+
+USER node
+ARG CLAUDE_VERSION=latest
+ARG CODEX_VERSION=latest
+ARG OPENCODE_VERSION=latest
+RUN npm install --global --prefix /opt/agent-tools \
+      "@anthropic-ai/claude-code@${CLAUDE_VERSION}" \
+      "@openai/codex@${CODEX_VERSION}" \
+      "@opencode/cli@${OPENCODE_VERSION}" \
+    && npm cache clean --force
+
+ENV NPM_CONFIG_PREFIX=/home/node/.local
+ENV PATH=/opt/agent-tools/bin:/usr/local/bin:/home/node/.local/bin:$PATH
+ENV DISABLE_AUTOUPDATER=1
+ENV DISABLE_UPDATES=1
+ENV OPENCODE_DISABLE_AUTOUPDATE=true
+RUN claude --version && kiro-cli --version && codex --version && opencode --version && gh --version \
+    && docker --version && docker compose version && docker buildx version
+WORKDIR /home/node
+CMD ["multica", "daemon", "start", "--foreground", "--no-auto-update"]

@@ -1,0 +1,160 @@
+services:
+  confluence-write:
+    profiles: [confluence-write]
+    image: ${MULTICA_PROJECT_NAME:-multica-sandbox}-mcp-relay:local
+    pull_policy: never
+    init: true
+    restart: unless-stopped
+    user: "${RELAY_UID:-1000}:${RELAY_GID:-1000}"
+    volumes:
+      - ./mcp-relay/confluence-write/config.json:/app/config.json:ro
+      - ./mcp-relay/confluence-write/.secrets:/run/relay-secrets:ro
+      - ./mcp-relay/confluence-write/data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    cpus: 0.5
+    mem_limit: 512m
+    stop_grace_period: 40s
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: "3" }
+
+  mcp-relay:
+    profiles: [relay]
+    image: ${MULTICA_PROJECT_NAME:-multica-sandbox}-mcp-relay:local
+    pull_policy: never
+    init: true
+    restart: unless-stopped
+    user: "${RELAY_UID:-1000}:${RELAY_GID:-1000}"
+    ports:
+      - "127.0.0.1:${RELAY_HTTP_PORT:-8090}:8080"
+    volumes:
+      - ./mcp-relay/config.json:/app/config.json:ro
+      - ./mcp-relay/.secrets:/run/relay-secrets:ro
+      - ./mcp-relay/data:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=256m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 256
+    mem_limit: 1g
+    stop_grace_period: 40s
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: "3" }
+
+  postgres:
+    security_opt: [no-new-privileges:true]
+    pids_limit: 256
+    mem_limit: 2g
+
+  backend:
+    image: ${MULTICA_PROJECT_NAME:-multica-sandbox}-backend:local
+    pull_policy: never
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    pids_limit: 256
+    mem_limit: 2g
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/readyz]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
+
+  frontend:
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 256
+    mem_limit: 2g
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  runtime:
+    profiles: [runtime]
+    image: ${MULTICA_PROJECT_NAME:-multica-sandbox}-runtime:local
+    pull_policy: never
+    working_dir: /home/node
+    init: true
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:size=1g,mode=1777
+    pids_limit: ${RUNTIME_PIDS_LIMIT:-512}
+    mem_limit: ${RUNTIME_MEMORY_LIMIT:-4g}
+    cpus: ${RUNTIME_CPUS:-2}
+    stop_grace_period: 60s
+    environment:
+      MULTICA_SERVER_URL: http://backend:8080
+      MULTICA_DAEMON_DEVICE_NAME: multica-docker-sandbox
+      MULTICA_WORKSPACES_ROOT: /workspaces
+      MULTICA_DAEMON_MAX_CONCURRENT_TASKS: ${RUNTIME_MAX_CONCURRENT_TASKS:-1}
+    volumes:
+      - runtime_home:/home/node
+      - runtime_workspaces:/workspaces
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, --max-time, "4", http://127.0.0.1:19514/health]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    restart: unless-stopped
+
+  qa-docker:
+    profiles: [qa]
+    image: ${MULTICA_PROJECT_NAME:-multica-sandbox}-qa-docker:local
+    pull_policy: never
+    user: "1000:1000"
+    privileged: true
+    network_mode: service:runtime
+    depends_on:
+      runtime:
+        condition: service_healthy
+        restart: true
+    environment:
+      DOCKER_TLS_CERTDIR: /certs
+    volumes:
+      - qa_docker_data:/home/rootless/.local/share/docker
+      - qa_docker_certs:/certs
+      - runtime_workspaces:/workspaces
+      - runtime_workspaces:${QA_WORKSPACES_ALIAS:-/workspaces-legacy}
+    mem_limit: ${QA_DOCKER_MEMORY_LIMIT:-12g}
+    cpus: ${QA_DOCKER_CPUS:-8}
+    pids_limit: 8192
+    stop_grace_period: 60s
+    healthcheck:
+      test: [CMD, docker, --host=unix:///run/user/1000/docker.sock, info]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  runtime_home:
+  runtime_workspaces:
+  qa_docker_data:
+  qa_docker_certs:

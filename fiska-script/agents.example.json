@@ -1,0 +1,23 @@
+{
+  "squad_name": "Coding squad",
+  "pool_name": "kiro",
+  "main": {
+    "name": "Main Claude coordinator",
+    "credentials": [
+      {"type": "anthropic_api_key", "reference": "op://Agents/Claude/api-key"},
+      {"type": "codex_api_key", "reference": "op://Agents/Codex/api-key"}
+    ]
+  },
+  "workers": [
+    {
+      "name": "Kiro worker 1",
+      "capabilities": ["code", "review"],
+      "credential": {"type": "kiro_api_key", "reference": "op://Agents/Kiro 1/api-key"}
+    },
+    {
+      "name": "Kiro worker 2",
+      "capabilities": ["code", "review"],
+      "credential": {"type": "kiro_api_key", "reference": "op://Agents/Kiro 2/api-key"}
+    }
+  ]
+}

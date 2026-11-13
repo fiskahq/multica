@@ -1,0 +1,5 @@
+ARG DOCKER_VERSION=29.9.3
+FROM docker:${DOCKER_VERSION}-dind-rootless
+USER root
+RUN mkdir -p /certs && chown rootless:rootless /certs && chmod 700 /certs
+USER rootless

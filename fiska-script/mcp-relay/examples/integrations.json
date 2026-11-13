@@ -1,0 +1,27 @@
+{
+  "jira": {
+    "site": "https://fiska.atlassian.net",
+    "email": { "file": "/run/relay-secrets/jira-email" },
+    "token": { "file": "/run/relay-secrets/jira-token" },
+    "allowWrites": false
+  },
+  "github": {
+    "token": { "file": "/run/relay-secrets/github-token" },
+    "allowWrites": false
+  },
+  "google": {
+    "credentialsFile": "/run/relay-secrets/google-adc.json",
+    "drive": true,
+    "gmail": { "query": "in:inbox", "pollSeconds": 60, "pagesPerPoll": 5 }
+  },
+  "upstreams": [
+    {
+      "name": "extra",
+      "transport": "http",
+      "url": "http://host.docker.internal:9000/mcp",
+      "headers": {
+        "Authorization": { "file": "/run/relay-secrets/extra-authorization" }
+      }
+    }
+  ]
+}
