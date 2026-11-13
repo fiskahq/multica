@@ -6,3 +6,4 @@ data
 config.json
 .git
 compose.override.yaml
+confluence-write

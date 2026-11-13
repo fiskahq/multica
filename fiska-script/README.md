@@ -502,7 +502,9 @@ Wait for active tasks to finish, then stop the runtime before updating:
 The update refuses to proceed while the runtime is running. It pulls frontend/database images, rebuilds the
 modified backend and runtime without the build cache, writes a PostgreSQL custom-format dump under `backups/`,
 and recreates the app. Rebuilding refreshes all four bundled coding CLIs.
-Migrations run through the upstream backend entrypoint. Readiness checks include database and
+Migrations run through the upstream backend entrypoint. The fork's pool migrations use numbers
+657-668. Upgrades from the earlier 630-641 pool migrations preserve existing tables, indexes,
+rotation positions and quota records; the old migration entries remain as history. Readiness checks include database and
 migration status through `/readyz`. A failed pull, build, or backup aborts before containers are
 replaced. A failed startup reports an error; there is no automatic schema rollback.
 Use `update.sh` for upgrades of an existing installation: the installer also fetches images,
@@ -730,3 +732,17 @@ python3 -m unittest discover -s . -p '*_test.py'
 
 The regression tests use a fake Docker command. They check secret preservation, update backup
 failure, running-runtime protection, and concurrent operation locking without starting agents.
+
+## Source layout and existing installations
+
+The supported source location is now `fiska-script/` inside the Fiska fork. The previous separate
+setup repository is no longer needed for new installations. Existing installations can continue
+running from their old directory until a planned migration; do not run a fresh setup over an
+active stack. Moving the source does not move private configuration or change running containers.
+
+Before relocating an existing installation, stop its runtime and owned QA stacks, back up its
+private configuration and data, and transfer the ignored configuration/state files and relay
+secrets to this directory. Review local Compose overrides for absolute paths, then verify the
+resolved configuration before restarting. Reinstall the cleanup and QA watchdog schedules from
+the new location and remove the old schedules so maintenance uses only one installation path.
+Keep the same `MULTICA_PROJECT_NAME` to retain the existing named volumes.

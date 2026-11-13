@@ -35,6 +35,9 @@ func (s *TaskService) PreparePoolTask(ctx context.Context, issue db.Issue, agent
 	if err != nil {
 		return db.CreateAgentTaskParams{}, err
 	}
+	if err := s.guardRunProjectAccess(ctx, issue, agent, attr.UserID, attr.AccountableUserID); err != nil {
+		return db.CreateAgentTaskParams{}, err
+	}
 	params := s.mentionTaskParams(ctx, issue, agent, comment.ID, attr)
 	params.TriggerSummary = pgtype.Text{String: truncateForSummary(comment.Content, 200), Valid: true}
 	params.FireAt = pgtype.Timestamptz{Time: time.Now(), Valid: true}
