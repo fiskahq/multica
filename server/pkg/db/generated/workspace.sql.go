@@ -53,7 +53,21 @@ func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams
 }
 
 const deleteWorkspace = `-- name: DeleteWorkspace :exec
-WITH ws_installations AS (
+WITH cleared_kiro_assignments AS (
+    DELETE FROM kiro_credential_assignment WHERE workspace_id = $1
+), cleared_kiro_members AS (
+    DELETE FROM kiro_credential_member WHERE workspace_id = $1
+), cleared_kiro_pool AS (
+    DELETE FROM kiro_credential_pool WHERE workspace_id = $1
+), ws_pools AS (
+    SELECT id FROM worker_pool WHERE workspace_id = $1
+), cleared_pool_delegations AS (
+    DELETE FROM worker_pool_delegation WHERE pool_id IN (SELECT id FROM ws_pools)
+), cleared_pool_members AS (
+    DELETE FROM worker_pool_member WHERE pool_id IN (SELECT id FROM ws_pools)
+), cleared_pools AS (
+    DELETE FROM worker_pool WHERE workspace_id = $1
+), ws_installations AS (
     SELECT id FROM channel_installation WHERE workspace_id = $1
 ),
 ws_sessions AS (

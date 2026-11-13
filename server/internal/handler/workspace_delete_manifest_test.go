@@ -19,6 +19,12 @@ const (
 // teardown. Adding a table requires an explicit ownership decision here; the
 // handler deletion graph must then implement that decision before CI passes.
 var workspaceDeletionManifest = map[string]workspaceDeleteAction{
+	"kiro_credential_pool":               workspaceDelete,
+	"kiro_credential_member":             workspaceDelete,
+	"kiro_credential_assignment":         workspaceDelete,
+	"worker_pool":                        workspaceDelete,
+	"worker_pool_member":                 workspaceDelete,
+	"worker_pool_delegation":             workspaceDelete,
 	"cloud_agent_connection":             workspaceDelete,
 	"activity_log":                       workspaceDelete,
 	"agent":                              workspaceDelete,

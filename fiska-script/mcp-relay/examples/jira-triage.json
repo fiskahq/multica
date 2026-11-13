@@ -1,0 +1,36 @@
+{
+  "endpoint": {
+    "name": "jira_triage",
+    "path": "/mcp/jira-triage",
+    "token": { "file": "/run/relay-secrets/endpoint-jira-triage-token" },
+    "allowTools": ["jira_triage__request"]
+  },
+  "integration": {
+    "name": "jira_triage",
+    "description": "Jira triage writes. Create one issue with POST /rest/api/3/issue; edit with PUT /rest/api/3/issue/KEY; assign with PUT .../assignee; transition with POST .../transitions; add evidence with POST .../comment; link duplicates with POST /rest/api/3/issueLink. GET is limited to issue and issueLink paths. Use the separate read-only jira__request tool for search, users, fields, projects and link types. Rich text uses Atlassian Document Format. Deletes, bulk writes, archive, notification and administration routes are rejected. Follow the assigned task scope, preserve source evidence, and verify every write by reading it back. Responses are wrapped in data.",
+    "baseUrl": "https://fiska.atlassian.net",
+    "pathPrefixes": ["/rest/api/3/issue", "/rest/api/3/issueLink"],
+    "auth": {
+      "type": "basic",
+      "username": { "file": "/run/relay-secrets/jira-email" },
+      "password": { "file": "/run/relay-secrets/jira-token" }
+    },
+    "allowWrites": true,
+    "writeRules": [
+      { "method": "POST", "pathPattern": "^/rest/api/3/issue$" },
+      {
+        "method": "PUT",
+        "pathPattern": "^/rest/api/3/issue/[A-Z][A-Z0-9_]*-[1-9][0-9]*$"
+      },
+      {
+        "method": "PUT",
+        "pathPattern": "^/rest/api/3/issue/[A-Z][A-Z0-9_]*-[1-9][0-9]*/assignee$"
+      },
+      {
+        "method": "POST",
+        "pathPattern": "^/rest/api/3/issue/[A-Z][A-Z0-9_]*-[1-9][0-9]*/(comment|transitions)$"
+      },
+      { "method": "POST", "pathPattern": "^/rest/api/3/issueLink$" }
+    ]
+  }
+}

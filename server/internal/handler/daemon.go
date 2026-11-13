@@ -2516,12 +2516,29 @@ func (h *Handler) finalizeClaimDelivery(
 		// its current owner as the task-token identity rather than the stale
 		// claim-time snapshot captured by the caller.
 		tokenParams.UserID = locked.OwnerID
+		if locked.Provider == "kiro" && response != nil && response.Agent != nil {
+			key, configured, err := service.AssignKiroCredential(ctx, qtx, agent.WorkspaceID, task.ID)
+			if err != nil {
+				return err
+			}
+			if configured {
+				if response.Agent.CustomEnv == nil {
+					response.Agent.CustomEnv = make(map[string]string)
+				}
+				response.Agent.CustomEnv["KIRO_API_KEY"] = key
+			}
+		}
 		return nil
 	}
 
 	receipt, err = h.TaskService.FinalizeTaskClaim(ctx, *task, token, deliveredCommentIDs, recordCommentReceipt, authorize, issueSnapshot, daemonTokens...)
 	if err == nil {
 		return receipt, nil, nil
+	}
+	if errors.Is(err, service.ErrKiroCredentialsUnavailable) {
+		failure := h.failClaimedTaskBeforeLaunch(ctx, task, service.ErrKiroCredentialsUnavailable.Error(),
+			taskfailure.ReasonAgentProviderQuotaLimit, "kiro_credentials_unavailable", http.StatusConflict, "no usable Kiro credentials")
+		return nil, failure, nil
 	}
 	var authzErr *service.ClaimDeliveryAuthzError
 	if !errors.As(err, &authzErr) {

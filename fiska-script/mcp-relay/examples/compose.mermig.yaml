@@ -1,0 +1,9 @@
+services:
+  relay:
+    image: fiska-mcp-relay-mermig:local
+    build:
+      context: .
+      dockerfile: Dockerfile.mermig
+    volumes:
+      - ${MERMIG_CHECKOUT:?Set MERMIG_CHECKOUT to a dedicated checkout}:/workspace
+      - ./data/mermig-home:/mermig-home

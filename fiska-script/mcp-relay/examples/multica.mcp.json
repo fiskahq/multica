@@ -1,0 +1,46 @@
+{
+  "mcpServers": {
+    "factory-jira": {
+      "type": "http",
+      "url": "http://127.0.0.1:8090/mcp/jira",
+      "headers": {
+        "Authorization": "Bearer REPLACE_WITH_THIS_ENDPOINT_TOKEN"
+      }
+    },
+    "factory-confluence": {
+      "type": "http",
+      "url": "http://127.0.0.1:8090/mcp/confluence",
+      "headers": {
+        "Authorization": "Bearer REPLACE_WITH_THIS_ENDPOINT_TOKEN"
+      }
+    },
+    "factory-cloudflare-fiska-com": {
+      "type": "http",
+      "url": "http://127.0.0.1:8090/mcp/cloudflare/fiska.com",
+      "headers": {
+        "Authorization": "Bearer REPLACE_WITH_THIS_ENDPOINT_TOKEN"
+      }
+    },
+    "factory-cloudflare-fiska-net": {
+      "type": "http",
+      "url": "http://127.0.0.1:8090/mcp/cloudflare/fiska.net",
+      "headers": {
+        "Authorization": "Bearer REPLACE_WITH_THIS_ENDPOINT_TOKEN"
+      }
+    },
+    "factory-cloudflare-fiska-io": {
+      "type": "http",
+      "url": "http://127.0.0.1:8090/mcp/cloudflare/fiska.io",
+      "headers": {
+        "Authorization": "Bearer REPLACE_WITH_THIS_ENDPOINT_TOKEN"
+      }
+    },
+    "factory-cloudflare-integratedcommerce-io": {
+      "type": "http",
+      "url": "http://127.0.0.1:8090/mcp/cloudflare/integratedcommerce.io",
+      "headers": {
+        "Authorization": "Bearer REPLACE_WITH_THIS_ENDPOINT_TOKEN"
+      }
+    }
+  }
+}

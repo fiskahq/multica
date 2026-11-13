@@ -47,6 +47,9 @@ import (
 // agent/system principals, but member/team targets fail closed without a
 // matching human.
 func (h *Handler) canInvokeAgent(ctx context.Context, agent db.Agent, actorType, actorID, originatorUserID, workspaceID string) bool {
+	if h.poolRoutingRequired(ctx, agent, actorType, actorID, workspaceID) {
+		return false
+	}
 	allowed := h.invokeAgentDecision(ctx, agent, actorType, actorID, originatorUserID, workspaceID)
 	if !allowed && actorType != "member" && originatorUserID == "" {
 		// MUL-6490: the wire reason stays the deliberately generic

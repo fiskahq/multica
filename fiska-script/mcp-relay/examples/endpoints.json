@@ -1,0 +1,52 @@
+{
+  "endpoints": [
+    {
+      "name": "jira",
+      "path": "/mcp/jira",
+      "token": {
+        "file": "/run/relay-secrets/endpoint-jira-token"
+      },
+      "allowTools": ["jira__request"]
+    },
+    {
+      "name": "confluence",
+      "path": "/mcp/confluence",
+      "token": {
+        "file": "/run/relay-secrets/endpoint-confluence-token"
+      },
+      "allowTools": ["confluence__request"]
+    },
+    {
+      "name": "cloudflare_fiska_com",
+      "path": "/mcp/cloudflare/fiska.com",
+      "token": {
+        "file": "/run/relay-secrets/endpoint-cloudflare-fiska-com-token"
+      },
+      "allowTools": ["cloudflare_fiska_com__request"]
+    },
+    {
+      "name": "cloudflare_fiska_net",
+      "path": "/mcp/cloudflare/fiska.net",
+      "token": {
+        "file": "/run/relay-secrets/endpoint-cloudflare-fiska-net-token"
+      },
+      "allowTools": ["cloudflare_fiska_net__request"]
+    },
+    {
+      "name": "cloudflare_fiska_io",
+      "path": "/mcp/cloudflare/fiska.io",
+      "token": {
+        "file": "/run/relay-secrets/endpoint-cloudflare-fiska-io-token"
+      },
+      "allowTools": ["cloudflare_fiska_io__request"]
+    },
+    {
+      "name": "cloudflare_integratedcommerce_io",
+      "path": "/mcp/cloudflare/integratedcommerce.io",
+      "token": {
+        "file": "/run/relay-secrets/endpoint-cloudflare-integratedcommerce-io-token"
+      },
+      "allowTools": ["cloudflare_integratedcommerce_io__request"]
+    }
+  ]
+}

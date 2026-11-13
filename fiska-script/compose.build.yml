@@ -1,0 +1,29 @@
+services:
+  mcp-relay:
+    build:
+      context: ${MULTICA_SETUP_DIR}/mcp-relay
+  backend:
+    build:
+      context: ${MULTICA_SETUP_DIR}/..
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${MULTICA_SOURCE_VERSION:?Build through the fiska-script scripts to include the source version}
+        COMMIT: ${MULTICA_SOURCE_COMMIT:-local}
+  runtime:
+    build:
+      context: ${MULTICA_SETUP_DIR:?Use the scripts in fiska-script}
+      dockerfile: Dockerfile.runtime
+      additional_contexts:
+        multica_backend: service:backend
+      args:
+        DOCKER_VERSION: ${QA_DOCKER_VERSION:-29.9.3}
+        CLAUDE_VERSION: ${CLAUDE_VERSION:-latest}
+        KIRO_VERSION: ${KIRO_VERSION:-latest}
+        CODEX_VERSION: ${CODEX_VERSION:-latest}
+        OPENCODE_VERSION: ${OPENCODE_VERSION:-latest}
+  qa-docker:
+    build:
+      context: ${MULTICA_SETUP_DIR:?Use the scripts in fiska-script}
+      dockerfile: Dockerfile.qa-docker
+      args:
+        DOCKER_VERSION: ${QA_DOCKER_VERSION:-29.9.3}

@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -1001,6 +1002,125 @@ func TestKiroBackendInvokesACPWithTrustAllTools(t *testing.T) {
 	}
 	if strings.Join(lines, "\n") != strings.Join([]string{"acp", "--trust-all-tools", "--agent", "multica"}, "\n") {
 		t.Errorf("unexpected argv after filtering: %q", lines)
+	}
+}
+
+func TestKiroBackendV3OmitsUnsupportedTrustFlags(t *testing.T) {
+	t.Parallel()
+	for _, engineArgs := range [][]string{{"--agent-engine", "v3"}, {"--agent-engine=v3"}} {
+		t.Run(strings.Join(engineArgs, " "), func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			argsFile := filepath.Join(dir, "argv.txt")
+			fakePath := filepath.Join(dir, "kiro-cli")
+			script := strings.Replace(fakeKiroACPScript(), "#!/bin/sh", `#!/bin/sh
+for arg in "$@"; do
+ case "$arg" in --trust-all-tools|--trust-tools|-a) echo 'unsupported v3 trust flag' >&2; exit 2;; esac
+done`, 1)
+			writeTestExecutable(t, fakePath, []byte(script))
+			backend, err := New("kiro", Config{ExecutablePath: fakePath, Logger: slog.Default(), Env: map[string]string{"KIRO_ARGS_FILE": argsFile}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			args := append([]string{"--trust-all-tools", "--trust-tools", "shell", "-a"}, engineArgs...)
+			session, err := backend.Execute(ctx, "test", ExecOptions{CustomArgs: args, Timeout: 5 * time.Second})
+			if err != nil {
+				t.Fatal(err)
+			}
+			go func() {
+				for range session.Messages {
+				}
+			}()
+			result := <-session.Result
+			if result.Status != "completed" {
+				t.Fatalf("v3 startup failed: %s", result.Error)
+			}
+			raw, err := os.ReadFile(argsFile)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := strings.Join(append([]string{"acp"}, engineArgs...), "\n")
+			if strings.TrimSpace(string(raw)) != want {
+				t.Fatalf("argv = %q, want %q", string(raw), want)
+			}
+		})
+	}
+}
+
+func TestKiroBackendSelectsAdvertisedModelConfig(t *testing.T) {
+	t.Parallel()
+	for _, resume := range []bool{false, true} {
+		for _, confirmed := range []bool{false, true} {
+			for _, advertise := range []bool{false, true} {
+				t.Run(fmt.Sprintf("resume=%t/confirmed=%t/advertise=%t", resume, confirmed, advertise), func(t *testing.T) {
+					t.Parallel()
+					dir := t.TempDir()
+					requests := filepath.Join(dir, "requests.jsonl")
+					fakePath := filepath.Join(dir, "kiro-cli")
+					selected := "claude-haiku-5.5"
+					if !confirmed {
+						selected = "auto"
+					}
+					script := strings.Replace(fakeKiroACPScript(), `  case "$line" in`, fmt.Sprintf(`  case "$line" in
+    *'"method":"session/new"'*|*'"method":"session/load"'*)
+      printf '{"jsonrpc":"2.0","id":%%s,"result":{"sessionId":"ses_v3","configOptions":[{"id":"model","currentValue":"auto"}]}}\n' "$id"
+      continue ;;
+    *'"method":"session/set_model"'*)
+      printf '{"jsonrpc":"2.0","id":%%s,"error":{"code":-32603,"message":"legacy model method unsupported"}}\n' "$id"
+      continue ;;
+    *'"method":"session/set_config_option"'*)
+      printf '{"jsonrpc":"2.0","id":%%s,"result":{"configOptions":[{"id":"model","currentValue":"%s"}]}}\n' "$id"
+      continue ;;
+  esac
+  case "$line" in`, selected), 1)
+					if !advertise {
+						script = strings.ReplaceAll(script, `"configOptions":[{"id":"model","currentValue":"auto"}]`, `"configOptions":[]`)
+					}
+					writeTestExecutable(t, fakePath, []byte(script))
+					backend, err := New("kiro", Config{ExecutablePath: fakePath, Logger: slog.Default(), Env: map[string]string{"KIRO_REQUESTS_FILE": requests}})
+					if err != nil {
+						t.Fatal(err)
+					}
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+					opts := ExecOptions{Model: "claude-haiku-5.5", CustomArgs: []string{"--agent-engine", "v3"}, Timeout: 5 * time.Second}
+					if resume {
+						opts.ResumeSessionID = "ses_v3"
+					}
+					session, err := backend.Execute(ctx, "test", opts)
+					if err != nil {
+						t.Fatal(err)
+					}
+					go func() {
+						for range session.Messages {
+						}
+					}()
+					result := <-session.Result
+					raw, err := os.ReadFile(requests)
+					if err != nil {
+						t.Fatal(err)
+					}
+					log := string(raw)
+					if strings.Contains(log, `"method":"session/set_model"`) || !strings.Contains(log, `"method":"session/set_config_option"`) || !strings.Contains(log, `"value":"claude-haiku-5.5"`) {
+						t.Fatalf("wrong model selection: %s", log)
+					}
+					if confirmed {
+						if result.Status != "completed" {
+							t.Fatalf("turn failed: %s", result.Error)
+						}
+					} else {
+						if result.Status != "failed" || !strings.Contains(result.Error, "did not confirm") {
+							t.Fatalf("unconfirmed model accepted: %+v", result)
+						}
+						if strings.Contains(log, `"method":"session/prompt"`) {
+							t.Fatal("prompt sent after unconfirmed model change")
+						}
+					}
+				})
+			}
+		}
 	}
 }
 

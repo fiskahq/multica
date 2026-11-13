@@ -1,0 +1,39 @@
+{
+  "name": "@fiska/mcp-relay",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test --test-timeout=30000 tests/*.test.ts",
+    "start": "node dist/src/main.js",
+    "dev": "tsx src/main.ts",
+    "setup": "node scripts/setup.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "secrets:sync": "node scripts/sync-secrets.mjs",
+    "multica:sync": "node scripts/multica-sync.mjs",
+    "multica:assign": "node scripts/multica-assign.mjs",
+    "format": "prettier --write src tests scripts examples *.json *.yaml *.md",
+    "format:check": "prettier --check src tests scripts examples *.json *.yaml *.md"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "ajv": "8.20.0",
+    "google-auth-library": "11.3.2",
+    "mailparser": "3.14.1",
+    "smtp-server": "3.21.3",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/mailparser": "3.9.0",
+    "@types/node": "24.19.2",
+    "@types/smtp-server": "3.5.13",
+    "prettier": "3.9.10",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2"
+  }
+}

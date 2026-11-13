@@ -133,6 +133,9 @@ friends. Multica drives them; it doesn't ship them.
 <details>
 <summary><b>Self-hosting the whole thing</b></summary>
 
+For the Fiska Docker app, agent runtime and MCP relay setup, use the
+[guided installer in `fiska-script/`](fiska-script/README.md).
+
 <br/>
 
 ```bash

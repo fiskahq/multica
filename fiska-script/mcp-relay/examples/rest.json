@@ -1,0 +1,72 @@
+{
+  "rest": [
+    {
+      "name": "confluence",
+      "description": "Read Fiska Confluence. GET /wiki/api/v2/spaces, /wiki/api/v2/pages, /wiki/api/v2/pages/PAGE_ID with body-format=storage; search via GET /wiki/rest/api/search with query.cql. Paths and query arguments are separate. Follow response link pagination using the same tool. Writes are disabled.",
+      "baseUrl": "https://fiska.atlassian.net",
+      "pathPrefixes": ["/wiki/api/v2", "/wiki/rest/api"],
+      "auth": {
+        "type": "basic",
+        "username": {
+          "file": "/run/relay-secrets/jira-email"
+        },
+        "password": {
+          "file": "/run/relay-secrets/jira-token"
+        }
+      },
+      "allowWrites": false
+    },
+    {
+      "name": "cloudflare_fiska_com",
+      "description": "Read Cloudflare zone data for fiska.com. Start with GET /zones with query.name=fiska.com; then GET /zones/ZONE_ID/dns_records, /settings, or /analytics/dashboard. Preserve result_info pagination. The token limits access to this zone. Writes are disabled.",
+      "baseUrl": "https://api.cloudflare.com/client/v4",
+      "pathPrefixes": ["/zones"],
+      "auth": {
+        "type": "bearer",
+        "token": {
+          "file": "/run/relay-secrets/cloudflare-fiska-com"
+        }
+      },
+      "allowWrites": false
+    },
+    {
+      "name": "cloudflare_fiska_net",
+      "description": "Read Cloudflare zone data for fiska.net. Start with GET /zones with query.name=fiska.net; then GET /zones/ZONE_ID/dns_records, /settings, or /analytics/dashboard. Preserve result_info pagination. The token limits access to this zone. Writes are disabled.",
+      "baseUrl": "https://api.cloudflare.com/client/v4",
+      "pathPrefixes": ["/zones"],
+      "auth": {
+        "type": "bearer",
+        "token": {
+          "file": "/run/relay-secrets/cloudflare-fiska-net"
+        }
+      },
+      "allowWrites": false
+    },
+    {
+      "name": "cloudflare_fiska_io",
+      "description": "Read Cloudflare zone data for fiska.io. Start with GET /zones with query.name=fiska.io; then GET /zones/ZONE_ID/dns_records, /settings, or /analytics/dashboard. Preserve result_info pagination. The token limits access to this zone. Writes are disabled.",
+      "baseUrl": "https://api.cloudflare.com/client/v4",
+      "pathPrefixes": ["/zones"],
+      "auth": {
+        "type": "bearer",
+        "token": {
+          "file": "/run/relay-secrets/cloudflare-fiska-io"
+        }
+      },
+      "allowWrites": false
+    },
+    {
+      "name": "cloudflare_integratedcommerce_io",
+      "description": "Read Cloudflare zone data for integratedcommerce.io. Start with GET /zones with query.name=integratedcommerce.io; then GET /zones/ZONE_ID/dns_records, /settings, or /analytics/dashboard. Preserve result_info pagination. The token limits access to this zone. Writes are disabled.",
+      "baseUrl": "https://api.cloudflare.com/client/v4",
+      "pathPrefixes": ["/zones"],
+      "auth": {
+        "type": "bearer",
+        "token": {
+          "file": "/run/relay-secrets/cloudflare-integratedcommerce-io"
+        }
+      },
+      "allowWrites": false
+    }
+  ]
+}
