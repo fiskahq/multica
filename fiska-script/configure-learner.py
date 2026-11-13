@@ -15,6 +15,8 @@ ROOT = Path(__file__).resolve().parent
 NAME = "background-learner"
 TITLE = "Background learning review"
 PROJECT = "Learning Review"
+DEFAULT_MODEL = "claude-opus-5.5"
+DEFAULT_THINKING_LEVEL = "high"
 PRIVATE_AUTOPILOT_FIX = "c3a9d8fd1e460f9cf79be7160f19cd1a12624332"
 
 
@@ -81,27 +83,26 @@ def configure(args, deployment):
         raise RuntimeError("An untracked background-learner exists; reconcile learner-state.json first.")
     if state.get("agent_id") and not existing:
         raise RuntimeError("Tracked learner was removed or renamed; reconcile state first.")
-    # Use an installed Kiro model, not a guessed model identifier.
-    reference = architect.unique(agents, "development-release") or next(
-        (a for a in agents if a.get("runtime_id") == runtime["id"] and a.get("model")), None)
-    model = args.model or state.get("model") or (reference or {}).get("model")
-    if not model:
-        raise RuntimeError("Pass --model with an available Kiro model.")
+    model = args.model or state.get("model") or DEFAULT_MODEL
+    thinking_level = args.thinking_level or state.get("thinking_level") or DEFAULT_THINKING_LEVEL
     instructions = (ROOT / "learner/instructions.md").read_text()
     agent = command("agent", *( ["update", existing["id"]] if existing else ["create"] ),
                     "--name", NAME, "--runtime-id", runtime["id"], "--model", model,
+                    "--thinking-level", thinking_level,
                     "--custom-args", '["--agent-engine","v3"]', "--max-concurrent-tasks", "1",
                     "--permission-mode", "private", "--description",
                     "Reviews finished issue runs and proposes evidence-backed lessons for human review. Never publishes automatically.",
                     "--instructions", instructions)
-    state.update(agent_id=agent["id"], model=model)
+    state.update(agent_id=agent["id"], model=model, thinking_level=thinking_level)
     architect.provision.write_state(state_path, state)
     saved = command("agent", "get", agent["id"])
     if (saved.get("max_concurrent_tasks") != 1 or saved.get("instructions") != instructions
-            or saved.get("model") != model or saved.get("permission_mode") != "private"):
+            or saved.get("model") != model or saved.get("thinking_level") != thinking_level
+            or saved.get("permission_mode") != "private"):
         raise RuntimeError("Learner agent readback differs from requested settings.")
     if args.prepare_only:
         print(json.dumps({"name": NAME, "agent_id": agent["id"], "model": model,
+                          "thinking_level": thinking_level,
                           "enabled": False, "next_step": "Deploy the synced backend, then rerun setup-learner.sh."}, indent=2))
         return
     version = json.loads(docker(deployment, "exec", "-T", "runtime", "curl", "--fail", "--silent",
@@ -162,6 +163,7 @@ def configure(args, deployment):
     docker(deployment, "-f", str(ROOT / "compose.learner.yml"), "--profile", "learner",
            "up", "-d", "--no-deps", "learner", capture=False)
     print(json.dumps({"name": NAME, "agent_id": agent["id"], "model": model,
+                      "thinking_level": thinking_level,
                       "autopilot_id": state["autopilot_id"], "capacity": 500, "scan_seconds": 60,
                       "started_at": state["started_at"], "automatic_publication": False}, indent=2))
 
@@ -171,7 +173,9 @@ def main():
     parser.add_argument("action", nargs="?", default="install", choices=("install", "status", "candidates", "show", "stop", "start"))
     parser.add_argument("task_id", nargs="?")
     parser.add_argument("--deployment-dir", type=Path, default=ROOT)
-    parser.add_argument("--model", help="Kiro model; defaults to the existing release agent's model")
+    parser.add_argument("--model", help="Kiro model; defaults to saved selection or claude-opus-5.5")
+    parser.add_argument("--thinking-level", choices=("low", "medium", "high"),
+                        help="Reasoning effort; defaults to saved selection or high")
     parser.add_argument("--prepare-only", action="store_true", help="Create/update the learner agent without starting background work")
     args = parser.parse_args()
     deployment = args.deployment_dir.resolve()

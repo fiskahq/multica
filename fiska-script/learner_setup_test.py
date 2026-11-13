@@ -77,15 +77,22 @@ class SetupTests(unittest.TestCase):
             provision=setup.load("provision-agents"))
         with tempfile.TemporaryDirectory() as directory:
             deployment = Path(directory)
-            args = SimpleNamespace(model="installed-model", prepare_only=False)
+            args = SimpleNamespace(model=None, thinking_level=None, prepare_only=False)
             with patch.object(setup, "load", return_value=architect), patch.object(setup, "docker", side_effect=docker), \
                     patch.object(setup, "native_api", side_effect=native_api), patch.object(setup, "verify_backend"), \
                     contextlib.redirect_stdout(io.StringIO()) as output:
                 setup.configure(args, deployment)
+                self.assertEqual(agents[0]["model"], "claude-opus-5.5")
+                self.assertEqual(agents[0]["thinking_level"], "high")
+                args.model, args.thinking_level = "explicit-model", "medium"
                 setup.configure(args, deployment)
+                args.model, args.thinking_level = None, None
+                setup.configure(args, deployment)
+                self.assertEqual(agents[0]["model"], "explicit-model")
+                self.assertEqual(agents[0]["thinking_level"], "medium")
             self.assertEqual((len(agents), len(projects), len(pilots), len(triggers)), (1, 1, 1, 1))
             self.assertNotIn("owner-secret", output.getvalue())
-            self.assertEqual(len(writes), 2)
+            self.assertEqual(len(writes), 3)
             self.assertTrue(all("--no-deps" in call and call[-1] == "learner" for call in writes))
             config = deployment / "learner-private/config.json"
             self.assertEqual(config.stat().st_mode & 0o777, 0o600)

@@ -751,8 +751,11 @@ Keep the same `MULTICA_PROJECT_NAME` to retain the existing named volumes.
 
 `./setup-learner.sh` installs one private Kiro **background-learner** and a small Docker service.
 It uses native Multica agent execution and a private **Learning Review** project. It does not run
-Hermes. The default model comes from the installed release agent, or another configured Kiro agent;
-use `--model MODEL` to select an available model explicitly. Kiro uses the existing credential pool.
+Hermes. New installs use **Opus 5.5 with high reasoning effort**. Use `--model MODEL` and
+`--thinking-level low|medium|high` to change the selection; later installs preserve saved choices.
+To upgrade an existing Haiku learner, run
+`./setup-learner.sh --model claude-opus-5.5 --thinking-level high`.
+Kiro uses the existing credential pool.
 
 The installer requires a backend built from the synced fork containing upstream private-project
 Autopilot protection (`c3a9d8fd1`). It verifies the stamped version against Git ancestry and refuses
