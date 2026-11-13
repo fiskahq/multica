@@ -41,6 +41,11 @@ compose() {
   if [[ -f "$MULTICA_SETUP_DIR/compose.local.yml" ]]; then
     extra=(-f "$MULTICA_SETUP_DIR/compose.local.yml")
   fi
+  if [[ -f "$MULTICA_SETUP_DIR/learner-private/config.json" ]]; then
+    extra+=(-f "$MULTICA_SETUP_DIR/compose.learner.yml")
+    profiles+=(--profile learner)
+  fi
+  LEARNER_UID="${LEARNER_UID:-$(id -u)}" LEARNER_GID="${LEARNER_GID:-$(id -g)}" \
   docker compose --project-name "${MULTICA_PROJECT_NAME:-multica-sandbox}" \
     --project-directory "$MULTICA_SETUP_DIR" --env-file "$MULTICA_SETUP_DIR/.env" \
     -f "$UPSTREAM_COMPOSE" -f "$MULTICA_SETUP_DIR/compose.sandbox.yml" ${extra[@]+"${extra[@]}"} ${profiles[@]+"${profiles[@]}"} "$@"
@@ -69,6 +74,9 @@ start_runtime() {
     python3 "$MULTICA_SETUP_DIR/qa-client.py"
   else
     compose up -d --wait --wait-timeout 360 runtime "$@"
+  fi
+  if [[ -f "$MULTICA_SETUP_DIR/learner-private/config.json" ]]; then
+    compose up -d --no-deps learner
   fi
 }
 

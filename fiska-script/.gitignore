@@ -4,6 +4,8 @@ backups/
 agent-state.json
 architect-state.json
 advisor-state.json
+learner-state.json
+learner-private/
 .agent-state-*
 __pycache__/
 agents.json

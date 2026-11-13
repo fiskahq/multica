@@ -746,3 +746,74 @@ secrets to this directory. Review local Compose overrides for absolute paths, th
 resolved configuration before restarting. Reinstall the cleanup and QA watchdog schedules from
 the new location and remove the old schedules so maintenance uses only one installation path.
 Keep the same `MULTICA_PROJECT_NAME` to retain the existing named volumes.
+
+## Background learning
+
+`./setup-learner.sh` installs one private Kiro **background-learner** and a small Docker service.
+It uses native Multica agent execution and a private **Learning Review** project. It does not run
+Hermes. The default model comes from the installed release agent, or another configured Kiro agent;
+use `--model MODEL` to select an available model explicitly. Kiro uses the existing credential pool.
+
+The installer requires a backend built from the synced fork containing upstream private-project
+Autopilot protection (`c3a9d8fd1`). It verifies the stamped version against Git ancestry and refuses
+unverifiable builds. `--prepare-only` creates the agent without starting runs. Updating only the CLI
+is insufficient. The installer never restarts the backend or runtime.
+
+```bash
+./setup-learner.sh
+./setup-learner.sh status
+./setup-learner.sh candidates
+./setup-learner.sh show SOURCE_TASK_UUID
+./setup-learner.sh stop
+./setup-learner.sh start
+```
+
+For an existing deployment whose private state remains elsewhere, add
+`--deployment-dir /absolute/path/to/existing/setup` to each command. The running service mounts its
+code from this checkout, so keep the checkout at that path. Fresh installs use this folder directly.
+
+Completed and failed **issue runs**, across accessible agents, are discovered every 60 seconds from
+paginated native task history. This first version uses asynchronous reconciliation rather than a
+new completion webhook in the backend. Runs completed before initial installation are excluded;
+runs already active at installation are included when they finish. Private chat sessions and the
+learner's own runs are excluded. Deleted history cannot be recovered.
+
+SQLite stores at most 500 pending/active items on persistent storage, with one active learner job.
+Atomic transactions enforce the bound, task IDs deduplicate discoveries, and a process lock prevents
+multiple workers dispatching the same active job. When full, new items stay in Multica history and
+are discovered on later scans. HTTP retries reuse the persisted body and native webhook idempotency
+key. A confirmed failed/skipped run or invalid output retries after 60 then 120 seconds, up to three
+attempts; exhausted items remain visible as `dead`. An uncertain network response keeps the same
+active item and key instead of starting another run. The learner consumes one of the runtime's
+existing task slots. The sidecar is limited to 0.5 CPU and 512 MiB RAM.
+
+The evidence packet contains a bounded, redacted transcript excerpt and recent issue comments.
+Long transcripts may omit earlier context. Candidates must cite the source task and supplied
+message sequence numbers, distinguish claims from verified results, and state applicability and
+validation limits. The queue saves the source project and agent independently of model output.
+It clears the prompt copy after processing; native Autopilot history still retains its payload.
+
+Review drafts using `candidates` or the private Learning Review project's Autopilot run history.
+A reviewer must check the cited evidence, narrow the scope, remove sensitive details, and check for
+an existing equivalent skill. Publish an approved lesson through Multica's native Skills editor
+(or `multica skill create/update`), then explicitly attach it to the intended agents. Preserve a
+project restriction in the skill where needed. This initial version deliberately has **no automatic
+publisher**: drafts do not affect other agents until a person publishes and attaches them.
+
+`learner-private/` contains the owner API credential, SQLite database, and sensitive drafts. It is
+ignored by Git, created with owner-only permissions, and mounted only into the learner container.
+The service has no Docker socket or provider credentials. Redaction is best effort, so keep the
+review project private and restrict its membership. The service checks that project visibility and
+the verified backend version still match before each new dispatch. After a backend upgrade, rerun
+`setup-learner.sh` to verify compatibility and refresh its credential and configuration.
+
+The status command reports queue counts and the last scan/worker heartbeat. A dead item needs
+operator inspection; there is no automatic deletion of drafts or completed receipt IDs. Back up
+`learner-private/` while the service is stopped, or use SQLite's online backup API. Do not delete
+receipts merely to reduce queue counts: they prevent repeated learning from the same source run.
+
+Verification, without paid model calls:
+
+```bash
+python3 -m unittest discover -s learner -p '*_test.py' -v
+```
