@@ -796,12 +796,30 @@ message sequence numbers, distinguish claims from verified results, and state ap
 validation limits. The queue saves the source project and agent independently of model output.
 It clears the prompt copy after processing; native Autopilot history still retains its payload.
 
-Review drafts using `candidates` or the private Learning Review project's Autopilot run history.
+Validated drafts automatically become unassigned **Todo** tickets in the private **Learning Review**
+project. Open that project's issue list to review the lesson, rationale, evidence, applicability,
+validation limits and review checklist. Existing queued drafts are backfilled without another model
+call. Runs that return `no_lesson` or fail validation do not create tickets.
+
+Ticket receipts prevent repeats across restarts and concurrent syncs. If a create response is lost,
+the service searches for the source-task marker, including closed tickets. An uncertain creation
+that cannot be found remains visible as `creation_outcome_unknown` in `status`; it is never blindly
+submitted again. Inspect the server and receipt before recovery. Keep the marker in the ticket
+description until the receipt has its issue ID. Recorded tickets are not rewritten or recreated
+after human edits, completion or deletion. The project's workflow must have Todo and no automatic
+handlers, so reviewing a lesson does not trigger development work.
+
+You can also inspect drafts using `candidates` or the Autopilot run history.
 A reviewer must check the cited evidence, narrow the scope, remove sensitive details, and check for
 an existing equivalent skill. Publish an approved lesson through Multica's native Skills editor
 (or `multica skill create/update`), then explicitly attach it to the intended agents. Preserve a
 project restriction in the skill where needed. This initial version deliberately has **no automatic
-publisher**: drafts do not affect other agents until a person publishes and attaches them.
+publisher**: closing a review ticket does not change agent behavior. Drafts do not affect other
+agents until a person publishes and attaches them.
+
+After pulling learner service changes, run `./setup-learner.sh stop` then `./setup-learner.sh start`
+to reload the worker code. This only restarts the queue service; native agent runs continue and are
+reconciled on startup.
 
 `learner-private/` contains the owner API credential, SQLite database, and sensitive drafts. It is
 ignored by Git, created with owner-only permissions, and mounted only into the learner container.

@@ -88,6 +88,9 @@ class Queue:
                 created REAL NOT NULL, updated REAL NOT NULL);
             CREATE UNIQUE INDEX IF NOT EXISTS one_active ON jobs ((1)) WHERE state='active';
             CREATE INDEX IF NOT EXISTS pending_jobs ON jobs (state, due, created);
+            CREATE TABLE IF NOT EXISTS review_tickets (
+                task_id TEXT PRIMARY KEY, body TEXT NOT NULL,
+                attempted INTEGER NOT NULL DEFAULT 0, issue_id TEXT, error TEXT);
         """)
 
     @contextmanager
@@ -237,6 +240,89 @@ def parse_candidate(result, task_id):
     return value
 
 
+def review_body(job, config):
+    source = json.loads(job["source"])
+    candidate = json.loads(job["candidate"])
+    marker = f'Learning source task: {job["task_id"]}'
+    sections = ["Draft lesson. Human review is required before publication.",
+                "Closing this ticket does not publish a skill or change any agent instructions."]
+    for label, field in (("Proposed lesson", "lesson"), ("Rationale", "rationale"),
+                         ("Applicability", "applicability"), ("Validation limits", "validation")):
+        sections.append(f'## {label}\n\n{candidate[field]}')
+    citations = [f'- Task `{e["task_id"]}`, message `{e["seq"]}`: {e["finding"]}'
+                 for e in candidate["evidence"]]
+    sections.append("## Evidence\n\n" + "\n".join(citations))
+    sections.append(f'## Source\n\n{marker}\n\nSource issue: `{source["issue_id"]}`'
+                    f'\n\nSource agent: {source.get("agent_name", source["agent_id"])}'
+                    f'\n\nLearning run: `{job["run_id"]}`')
+    sections.append("## Review\n\n- [ ] Check the cited evidence and validation limits.\n"
+                    "- [ ] Confirm project and role scope; remove sensitive details.\n"
+                    "- [ ] Check for an existing equivalent skill.\n"
+                    "- [ ] Record acceptance, changes needed, or rejection.\n\n"
+                    "If accepted, publish through Skills and attach only to the intended agents.")
+    return {"title": "Review lesson: " + candidate["title"][:180],
+            "description": "\n\n".join(sections), "project_id": config["project_id"],
+            "status": "todo", "priority": "none", "allow_duplicate": True}
+
+
+def sync_reviews(api, queue, config):
+    """Materialize validated drafts without resubmitting an uncertain issue creation."""
+    jobs = queue.db.execute("""SELECT j.* FROM jobs j LEFT JOIN review_tickets r USING(task_id)
+        WHERE j.state='review' AND r.issue_id IS NULL ORDER BY j.created LIMIT 20""").fetchall()
+    if not jobs:
+        return
+    if api.get("/api/config").get("server_version") != config["server_version"]:
+        raise ValueError("Backend version changed; rerun learner setup")
+    project = api.get(f'/api/projects/{config["project_id"]}')
+    if project.get("visibility") != "private":
+        raise ValueError("Learning review project must remain private")
+    workflows = api.get("/api/issue-workflows")["workflows"]
+    workflow = next((w for w in workflows if w["id"] == project.get("workflow_id")
+                     or (not project.get("workflow_id") and w.get("is_default"))), None)
+    if not workflow or not any(s["status_key"] == "todo" for s in workflow["steps"]):
+        raise ValueError("Learning review workflow must contain Todo")
+    if any(s.get("handler", {}).get("type", "none") != "none" for s in workflow["steps"]):
+        raise ValueError("Learning review workflow must have no automatic handlers")
+    for job in jobs:
+        ident = job["task_id"]
+        queue.db.execute("INSERT OR IGNORE INTO review_tickets(task_id,body) VALUES(?,?)",
+                         (ident, json.dumps(review_body(job, config))))
+        receipt = queue.db.execute("SELECT * FROM review_tickets WHERE task_id=?", (ident,)).fetchone()
+        if receipt["issue_id"]:
+            continue
+        marker = f"Learning source task: {ident}"
+        query = urllib.parse.urlencode({"q": ident, "project_id": config["project_id"],
+                                       "include_closed": "true", "limit": 50})
+        matches = [i for i in api.get("/api/issues/search?" + query)["issues"]
+                   if i.get("project_id") == config["project_id"]
+                   and marker in (i.get("description") or "")]
+        if len(matches) == 1:
+            queue.db.execute("UPDATE review_tickets SET issue_id=?,error=NULL WHERE task_id=?",
+                             (matches[0]["id"], ident))
+            continue
+        if matches:
+            queue.db.execute("UPDATE review_tickets SET error='multiple_review_tickets' WHERE task_id=?", (ident,))
+            continue
+        # Commit the send claim before HTTP. A lost reply is reconciled by the source marker,
+        # never by another POST; the issue endpoint has no general idempotency-key support.
+        claimed = queue.db.execute("""UPDATE review_tickets SET attempted=1,error='creation_outcome_unknown'
+            WHERE task_id=? AND attempted=0 AND issue_id IS NULL""", (ident,)).rowcount
+        if not claimed:
+            continue
+        try:
+            issue, _ = api.request("/api/issues", json.loads(receipt["body"]))
+        except urllib.error.HTTPError as error:
+            if error.code in (400, 401, 403, 404, 409, 422, 429):
+                queue.db.execute("UPDATE review_tickets SET attempted=0,error=? WHERE task_id=?",
+                                 (f"create_http_{error.code}", ident))
+            continue
+        except (OSError, ValueError):
+            continue
+        if issue.get("id") and issue.get("project_id") == config["project_id"]:
+            queue.db.execute("UPDATE review_tickets SET issue_id=?,error=NULL WHERE task_id=?",
+                             (issue["id"], ident))
+
+
 def process(api, queue, config):
     job = queue.claim()
     if not job:
@@ -309,7 +395,9 @@ def main():
     queue = Queue(data / "queue.sqlite3", config.get("capacity", 500))
     if args.action == "status":
         heartbeat = queue.db.execute("SELECT value FROM settings WHERE key='heartbeat'").fetchone()
-        print(json.dumps({"counts": queue.status(), "heartbeat": json.loads(heartbeat[0]) if heartbeat else None}))
+        tickets = [dict(r) for r in queue.db.execute("SELECT task_id,issue_id,error FROM review_tickets")]
+        print(json.dumps({"counts": queue.status(), "review_tickets": tickets,
+                          "heartbeat": json.loads(heartbeat[0]) if heartbeat else None}))
         return
     if args.action == "candidates":
         rows = queue.db.execute("SELECT task_id,source,candidate FROM jobs WHERE state='review' ORDER BY created")
@@ -339,6 +427,10 @@ def main():
             except Exception as error:
                 # URLs, HTTP errors and provider output can contain secrets.
                 report.update(ok=False, error=type(error).__name__)
+            try:
+                sync_reviews(api, queue, config)
+            except Exception as error:
+                report.update(ok=False, review_error=type(error).__name__)
             report["counts"] = queue.status()
             queue.db.execute("INSERT INTO settings VALUES('heartbeat',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                              (json.dumps(report),))

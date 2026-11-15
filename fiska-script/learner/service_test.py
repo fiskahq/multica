@@ -189,5 +189,106 @@ class EvidenceTests(unittest.TestCase):
                 q.db.close()
 
 
+class ReviewAPI(FakeAPI):
+    def __init__(self):
+        super().__init__()
+        self.issues = []
+        self.posts = 0
+        self.handler = 'none'
+        self.reject_before_create = False
+
+    def get(self, path):
+        if path == '/api/issue-workflows':
+            return {'workflows': [{'id': 'default', 'is_default': True,
+                    'steps': [{'status_key': 'todo', 'handler': {'type': self.handler}}]}]}
+        if path.startswith('/api/issues/search?'):
+            return {'issues': self.issues}
+        return super().get(path)
+
+    def request(self, path, body=None, key=None):
+        assert path == '/api/issues'
+        self.posts += 1
+        if self.reject_before_create:
+            raise TimeoutError('outcome unknown')
+        issue = dict(body, id='review-1')
+        self.issues.append(issue)
+        if self.lost_reply:
+            self.lost_reply = False
+            raise TimeoutError('reply lost after commit')
+        return issue, {}
+
+
+class ReviewTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.path = Path(self.tmp.name) / 'queue.db'
+        self.queue = learner.Queue(self.path)
+        self.queue.enqueue(SOURCE)
+        self.queue.update(SOURCE['id'], state='review', candidate=json.dumps(CANDIDATE), run_id='run-1')
+        self.api = ReviewAPI()
+
+    def tearDown(self):
+        self.queue.db.close()
+        self.tmp.cleanup()
+
+    def test_backfills_once_and_preserves_human_edits(self):
+        learner.sync_reviews(self.api, self.queue, CONFIG)
+        issue = self.api.issues[0]
+        self.assertEqual(issue['project_id'], 'private-project')
+        self.assertEqual(issue['status'], 'todo')
+        self.assertNotIn('assignee_id', issue)
+        self.assertIn(CANDIDATE['lesson'], issue['description'])
+        self.assertIn('Learning source task: source-1', issue['description'])
+        issue['title'], issue['status'] = 'Edited by reviewer', 'done'
+        learner.sync_reviews(self.api, self.queue, CONFIG)
+        self.assertEqual(self.api.posts, 1)
+        self.assertEqual(issue['title'], 'Edited by reviewer')
+
+    def test_lost_reply_recovers_closed_ticket_after_restart(self):
+        self.api.lost_reply = True
+        learner.sync_reviews(self.api, self.queue, CONFIG)
+        self.api.issues[0]['status'] = 'done'
+        self.queue.db.close()
+        self.queue = learner.Queue(self.path)
+        learner.sync_reviews(self.api, self.queue, CONFIG)
+        self.assertEqual(self.api.posts, 1)
+        receipt = self.queue.db.execute('SELECT * FROM review_tickets').fetchone()
+        self.assertEqual(receipt['issue_id'], 'review-1')
+        self.assertIsNone(receipt['error'])
+
+    def test_unknown_creation_is_not_blindly_repeated(self):
+        self.api.reject_before_create = True
+        learner.sync_reviews(self.api, self.queue, CONFIG)
+        learner.sync_reviews(self.api, self.queue, CONFIG)
+        self.assertEqual(self.api.posts, 1)
+        receipt = self.queue.db.execute('SELECT * FROM review_tickets').fetchone()
+        self.assertEqual(receipt['error'], 'creation_outcome_unknown')
+
+    def test_private_project_and_manual_workflow_required(self):
+        for attribute, value in [('visibility', 'workspace'), ('handler', 'agent'), ('version', 'old')]:
+            api = ReviewAPI()
+            setattr(api, attribute, value)
+            with self.assertRaises(ValueError):
+                learner.sync_reviews(api, self.queue, CONFIG)
+            self.assertEqual(api.posts, 0)
+
+    def test_no_lesson_and_invalid_results_never_create_tickets(self):
+        for state in ('no_lesson', 'dead', 'pending', 'active'):
+            self.queue.update(SOURCE['id'], state=state)
+            learner.sync_reviews(self.api, self.queue, CONFIG)
+        self.assertEqual(self.api.posts, 0)
+
+    def test_concurrent_syncs_claim_only_one_create(self):
+        def sync(_):
+            q = learner.Queue(self.path)
+            try:
+                learner.sync_reviews(self.api, q, CONFIG)
+            finally:
+                q.db.close()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+            list(pool.map(sync, range(12)))
+        self.assertEqual(self.api.posts, 1)
+
+
 if __name__ == "__main__":
     unittest.main()
