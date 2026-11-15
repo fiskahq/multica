@@ -811,11 +811,38 @@ handlers, so reviewing a lesson does not trigger development work.
 
 You can also inspect drafts using `candidates` or the Autopilot run history.
 A reviewer must check the cited evidence, narrow the scope, remove sensitive details, and check for
-an existing equivalent skill. Publish an approved lesson through Multica's native Skills editor
-(or `multica skill create/update`), then explicitly attach it to the intended agents. Preserve a
-project restriction in the skill where needed. This initial version deliberately has **no automatic
-publisher**: closing a review ticket does not change agent behavior. Drafts do not affect other
-agents until a person publishes and attaches them.
+an existing equivalent skill. The worker posts a copyable approval command on each review ticket:
+
+```text
+/learning approve CONTENT_HASH
+```
+
+Only a member comment from the installation owner's account (the API credential's `/api/me` user)
+is accepted. Agent and task-backed comments cannot approve. Copy the full command from the latest
+Learning automation comment; the hash binds the ticket's exact text and generated skill content.
+Edit **Proposed lesson**, **Applicability**, or **Validation limits** before approving. Edits produce
+a new command on the next scan and invalidate earlier commands. Marking a ticket Done is not approval.
+The worker checks approvals every 60 seconds. `/learning hold` supersedes a pending approval, but
+does not undo work already applied.
+
+Approval creates a separate native `learned-SOURCE_TASK_UUID` skill and attaches it to the source
+agent. To select different agents, append ` agents=AGENT_UUID,AGENT_UUID` to the approval command.
+The skill is **workspace-visible**. Project scope is preserved as an instruction in the skill, not
+as a runtime access restriction. Only the reviewed procedure, applicability and validation limits
+are published; the raw transcript and draft rationale are not copied into the skill.
+
+The publisher records the approver, approval comment, content hash, native skill ID/version and
+verified agent attachments, then posts a receipt on the review ticket. Existing skills are not
+replaced or automatically merged. Native unique skill names and additive attachments support retry
+after a lost response. Partial application resumes from its receipt; operator edits, disabled skills
+or recorded attachments that were removed cause a block instead of being overwritten. Check
+`./setup-learner.sh status` for publication state and errors.
+
+Applied skills are available on subsequent runs; existing runs are not restarted. To undo
+application, remove the skill from the listed agents in Skills settings. Completed receipts never
+reapply a removed skill. One review ticket has one immutable publication; later ticket edits do not
+republish. Further revisions or merges into shared skills use Multica's native Skills editor and
+version history. Manual publication and attachment remain available.
 
 After pulling learner service changes, run `./setup-learner.sh stop` then `./setup-learner.sh start`
 to reload the worker code. This only restarts the queue service; native agent runs continue and are

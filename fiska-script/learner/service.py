@@ -259,7 +259,8 @@ def review_body(job, config):
                     "- [ ] Confirm project and role scope; remove sensitive details.\n"
                     "- [ ] Check for an existing equivalent skill.\n"
                     "- [ ] Record acceptance, changes needed, or rejection.\n\n"
-                    "If accepted, publish through Skills and attach only to the intended agents.")
+                    "To apply an accepted lesson automatically, use the approval command in the "
+                    "Learning automation comment. You can also publish manually through Skills.")
     return {"title": "Review lesson: " + candidate["title"][:180],
             "description": "\n\n".join(sections), "project_id": config["project_id"],
             "status": "todo", "priority": "none", "allow_duplicate": True}
@@ -380,6 +381,8 @@ def process(api, queue, config):
 
 
 def main():
+    import publication
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("serve", "status", "candidates", "show"))
     parser.add_argument("task_id", nargs="?")
@@ -393,10 +396,14 @@ def main():
     data.mkdir(parents=True, exist_ok=True)
     config = json.loads(Path(args.config).read_text())
     queue = Queue(data / "queue.sqlite3", config.get("capacity", 500))
+    publication.initialize(queue)
     if args.action == "status":
         heartbeat = queue.db.execute("SELECT value FROM settings WHERE key='heartbeat'").fetchone()
         tickets = [dict(r) for r in queue.db.execute("SELECT task_id,issue_id,error FROM review_tickets")]
+        publications = [dict(r) for r in queue.db.execute(
+            "SELECT task_id,state,skill_id,skill_version,targets,applied,error FROM learning_publications")]
         print(json.dumps({"counts": queue.status(), "review_tickets": tickets,
+                          "publications": publications,
                           "heartbeat": json.loads(heartbeat[0]) if heartbeat else None}))
         return
     if args.action == "candidates":
@@ -413,6 +420,7 @@ def main():
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         api = API(config)
         next_scan = 0
+        next_publication = 0
         while True:
             report = {"at": datetime.now(timezone.utc).isoformat()}
             if time.monotonic() >= next_scan:
@@ -431,6 +439,12 @@ def main():
                 sync_reviews(api, queue, config)
             except Exception as error:
                 report.update(ok=False, review_error=type(error).__name__)
+            if time.monotonic() >= next_publication:
+                try:
+                    publication.sync(api, queue, config)
+                except Exception as error:
+                    report.update(ok=False, publication_error=type(error).__name__)
+                next_publication = time.monotonic() + 60
             report["counts"] = queue.status()
             queue.db.execute("INSERT INTO settings VALUES('heartbeat',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                              (json.dumps(report),))
