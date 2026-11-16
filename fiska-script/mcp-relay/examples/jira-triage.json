@@ -2,22 +2,36 @@
   "endpoint": {
     "name": "jira_triage",
     "path": "/mcp/jira-triage",
-    "token": { "file": "/run/relay-secrets/endpoint-jira-triage-token" },
+    "token": {
+      "file": "/run/relay-secrets/endpoint-jira-triage-token"
+    },
     "allowTools": ["jira_triage__request"]
   },
   "integration": {
     "name": "jira_triage",
-    "description": "Jira triage writes. Create one issue with POST /rest/api/3/issue; edit with PUT /rest/api/3/issue/KEY; assign with PUT .../assignee; transition with POST .../transitions; add evidence with POST .../comment; link duplicates with POST /rest/api/3/issueLink. GET is limited to issue and issueLink paths. Use the separate read-only jira__request tool for search, users, fields, projects and link types. Rich text uses Atlassian Document Format. Deletes, bulk writes, archive, notification and administration routes are rejected. Follow the assigned task scope, preserve source evidence, and verify every write by reading it back. Responses are wrapped in data.",
+    "description": "Jira triage writes. Create one issue with POST /rest/api/3/issue; edit with PUT /rest/api/3/issue/KEY; assign with PUT .../assignee; transition with POST .../transitions; add evidence with POST .../comment; link duplicates with POST /rest/api/3/issueLink. GET also supports release discovery: Jira releases are versions. GET /rest/api/3/project/KEY/version with query {query: NAME_FRAGMENT, status: unreleased|released|archived, startAt: 0, maxResults: 50}; omit query/status for all versions. Read values and advance startAt by values.length until isLast. GET /rest/api/3/version/ID reads details. Release creation, updates and deletion are not allowed here. Use the separate read-only jira__request tool for search, users, fields, projects and link types. Rich text uses Atlassian Document Format. Deletes, bulk writes, archive, notification and administration routes are rejected. Follow the assigned task scope, preserve source evidence, and verify every write by reading it back. Responses are wrapped in data.",
     "baseUrl": "https://fiska.atlassian.net",
-    "pathPrefixes": ["/rest/api/3/issue", "/rest/api/3/issueLink"],
+    "pathPrefixes": [
+      "/rest/api/3/issue",
+      "/rest/api/3/issueLink",
+      "/rest/api/3/project",
+      "/rest/api/3/version"
+    ],
     "auth": {
       "type": "basic",
-      "username": { "file": "/run/relay-secrets/jira-email" },
-      "password": { "file": "/run/relay-secrets/jira-token" }
+      "username": {
+        "file": "/run/relay-secrets/jira-email"
+      },
+      "password": {
+        "file": "/run/relay-secrets/jira-token"
+      }
     },
     "allowWrites": true,
     "writeRules": [
-      { "method": "POST", "pathPattern": "^/rest/api/3/issue$" },
+      {
+        "method": "POST",
+        "pathPattern": "^/rest/api/3/issue$"
+      },
       {
         "method": "PUT",
         "pathPattern": "^/rest/api/3/issue/[A-Z][A-Z0-9_]*-[1-9][0-9]*$"
@@ -30,7 +44,10 @@
         "method": "POST",
         "pathPattern": "^/rest/api/3/issue/[A-Z][A-Z0-9_]*-[1-9][0-9]*/(comment|transitions)$"
       },
-      { "method": "POST", "pathPattern": "^/rest/api/3/issueLink$" }
+      {
+        "method": "POST",
+        "pathPattern": "^/rest/api/3/issueLink$"
+      }
     ]
   }
 }

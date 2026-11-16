@@ -217,3 +217,83 @@ test("Drive tools encode query parameters and export text or binary", async () =
 test("streamed response bounds are enforced", async () => {
   await assert.rejects(boundedBody(new Response("12345"), 4), /exceeds/);
 });
+
+test("Jira release lookup works read-only and preserves filters, pagination and version details", async (t) => {
+  process.env.JIRA_RELEASE_TEST = "fixture";
+  const original = globalThis.fetch;
+  const calls: URL[] = [];
+  globalThis.fetch = (async (url, init) => {
+    assert.equal(init?.method, "GET");
+    const parsed = new URL(String(url));
+    calls.push(parsed);
+    const detail = parsed.pathname.endsWith("/version/101");
+    const second = parsed.searchParams.get("startAt") === "1";
+    return new Response(
+      JSON.stringify(
+        detail
+          ? { id: "101", name: "Release 1" }
+          : {
+              startAt: second ? 1 : 0,
+              maxResults: 1,
+              total: 2,
+              isLast: second,
+              values: [
+                {
+                  id: second ? "102" : "101",
+                  name: second ? "Release 2" : "Release 1",
+                },
+              ],
+            },
+      ),
+      { headers: { "content-type": "application/json" } },
+    );
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = original;
+    delete process.env.JIRA_RELEASE_TEST;
+  });
+  const registry = new ToolRegistry();
+  registerServices(
+    registry,
+    configSchema.parse({
+      http: { token: { env: "JIRA_RELEASE_TEST" } },
+      jira: {
+        site: "https://example.atlassian.net",
+        email: { env: "JIRA_RELEASE_TEST" },
+        token: { env: "JIRA_RELEASE_TEST" },
+        allowWrites: false,
+      },
+    }),
+  );
+  for (const startAt of [0, 1]) {
+    const result = await registry.call("jira__request", {
+      path: "/rest/api/3/project/MS/version",
+      query: {
+        query: "Release & billing",
+        status: "unreleased",
+        startAt,
+        maxResults: 1,
+      },
+    });
+    assert.ok(!result.isError);
+    assert.match(JSON.stringify(result), startAt ? /102/ : /101/);
+    assert.equal(calls[startAt].searchParams.get("query"), "Release & billing");
+    assert.equal(calls[startAt].searchParams.get("status"), "unreleased");
+    assert.equal(calls[startAt].searchParams.get("startAt"), String(startAt));
+  }
+  assert.ok(
+    !(await registry.call("jira__request", { path: "/rest/api/3/version/101" }))
+      .isError,
+  );
+  assert.equal(
+    (
+      await registry.call("jira__request", {
+        method: "PUT",
+        path: "/rest/api/3/version/101",
+        body: { released: true },
+      })
+    ).isError,
+    true,
+  );
+  assert.equal(calls.length, 3);
+});

@@ -157,6 +157,24 @@ restrictions are enforced by the service adapter, command definition, upstream, 
 
 ## Jira and GitHub
 
+Jira calls releases **project versions**. Both `jira__request` and `jira_triage__request`
+can find them using the [project versions API](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-project-versions/):
+
+```json
+{
+  "path": "/rest/api/3/project/MS/version",
+  "query": { "status": "unreleased", "startAt": 0, "maxResults": 50 }
+}
+```
+
+Add `query.query` to filter by a release-name fragment. Omit `status` to include all statuses.
+Read `values`, then advance `startAt` by the returned count until `isLast` is true; stop and report
+an incomplete result if a non-final page is empty. Read details with
+`GET /rest/api/3/version/ID`. Use `jira__request` issue search with
+`query.jql: "project = MS AND fixVersion = ID"` to find the release's tickets.
+The Jira tool returns the response directly; the triage tool wraps it in `data`.
+Release lookup does not require write access. The triage endpoint still rejects release mutations.
+
 Copy the `jira` and/or `github` objects from
 [examples/integrations.json](examples/integrations.json) into `config.json`. On the host, use the
 factory's existing authentication to create the mounted credential files:
