@@ -908,7 +908,9 @@ The detail response's `decision_policy` contains `mode`, `root_issue_id`, `avail
 an explicit command, `configured_by` and `comment_id`. Agent mode also contains `agent_id` and
 `agent_name`. A selected agent becoming unavailable leaves mode unchanged with `available: false`;
 the instructions require waiting for a human rather than silently enabling automatic decisions.
-Older backends omit this field. Policy-read failures must not be treated as automatic approval.
+Older backends omit this field. It is also omitted when the root is in a private project the
+reader cannot access; the child remains readable. Task briefs fail closed for that case. Missing
+policy or policy-read failures must not be treated as automatic approval.
 
 Policy changes apply to pending and future decisions when an agent next checks the policy.
 They do not start a run, redirect an already running turn, resolve a question, or advance a blocked

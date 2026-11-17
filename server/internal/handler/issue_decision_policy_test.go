@@ -219,3 +219,33 @@ func TestDecisionPolicyAtomicRollback(t *testing.T) {
 		t.Fatal("failed command left a comment")
 	}
 }
+
+func TestDecisionPolicyPrivateRootDoesNotHidePublicChild(t *testing.T) {
+	f := newPrivateProjectFixture(t)
+	decisionCommand(t, f.secretIssue, "/decisions auto", http.StatusCreated, "")
+	dbfx.Exec(t, "UPDATE issue SET parent_issue_id = $1 WHERE id = $2", f.secretIssue, f.publicIssue)
+	var out IssueResponse
+	getIssueAs(t, f.outsider, f.publicIssue).Want(http.StatusOK).JSON(&out)
+	if out.DecisionPolicy != nil {
+		t.Fatal("private root policy leaked through public child")
+	}
+	getIssueAs(t, f.insider, f.publicIssue).Want(http.StatusOK).JSON(&out)
+	if out.DecisionPolicy == nil || out.DecisionPolicy.Mode != "auto" {
+		t.Fatal("authorized reader lost inherited policy")
+	}
+	runtime := dbfx.Runtime(t, "Private decision policy runtime")
+	agent := dbfx.Agent(t, "Private root policy observer", runtime, testutil.Cols{"owner_id": f.outsider})
+	taskID := dbfx.Task(t, agent, testutil.Cols{"issue_id": f.publicIssue, "runtime_id": runtime, "originator_user_id": f.outsider, "accountable_user_id": f.outsider})
+	task, err := testHandler.Queries.GetAgentTask(context.Background(), parseUUID(taskID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	issue, err := testHandler.Queries.GetIssue(context.Background(), parseUUID(f.publicIssue))
+	if err != nil {
+		t.Fatal(err)
+	}
+	brief := testHandler.decisionPolicyBrief(context.Background(), issue, &task)
+	if !strings.Contains(brief, "could not be loaded") || strings.Contains(brief, f.secretIssue) || strings.Contains(brief, "Decision mode: auto") {
+		t.Fatalf("private policy leaked through claim: %s", brief)
+	}
+}

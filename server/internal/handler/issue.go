@@ -2591,10 +2591,9 @@ func (h *Handler) GetIssue(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to load decision policy")
 		return
 	}
-	if !h.requireIssueIDVisible(w, r, uuidToString(issue.WorkspaceID), root.ID, http.StatusForbidden, "decision policy root is not accessible") {
-		return
+	if hidden.CanSeeProject(root.ProjectID) {
+		resp.DecisionPolicy = &policy
 	}
-	resp.DecisionPolicy = &policy
 	h.fillStatusCategory(r.Context(), issue.WorkspaceID, hidden, &resp)
 	detailLabels := h.labelsByIssue(r.Context(), issue.WorkspaceID, []pgtype.UUID{issue.ID})[uuidToString(issue.ID)]
 	if detailLabels == nil {

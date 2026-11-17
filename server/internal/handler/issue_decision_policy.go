@@ -160,10 +160,17 @@ func (h *Handler) prepareDecisionCommand(w http.ResponseWriter, r *http.Request,
 	return policy, true
 }
 
-func (h *Handler) decisionPolicyBrief(ctx context.Context, issue db.Issue) string {
-	policy, _, err := h.effectiveDecisionPolicy(ctx, issue)
+func (h *Handler) decisionPolicyBrief(ctx context.Context, issue db.Issue, task *db.AgentTaskQueue) string {
+	const unavailable = "\n\nDecision policy could not be loaded. Do not resolve critical decisions autonomously. Ask the human owner to restore access before dependent work.\n"
+	policy, root, err := h.effectiveDecisionPolicy(ctx, issue)
 	if err != nil {
-		return "\n\nDecision policy could not be loaded. Do not resolve critical decisions autonomously. Ask the human owner to restore access before dependent work.\n"
+		return unavailable
+	}
+	if task != nil && root.ProjectID.Valid {
+		hidden, err := h.hiddenProjectsForAgentRun(ctx, issue.WorkspaceID, uuidToString(task.AgentID), uuidToString(task.ID))
+		if err != nil || !hidden.CanSeeProject(root.ProjectID) {
+			return unavailable
+		}
 	}
 	return renderDecisionPolicyBrief(policy, uuidToString(issue.ID))
 }
