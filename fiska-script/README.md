@@ -865,3 +865,56 @@ Verification, without paid model calls:
 ```bash
 python3 -m unittest discover -s learner -p '*_test.py' -v
 ```
+
+## Per-flow decision policy
+
+Post one of these as a separate top-level comment on the root ticket:
+
+```text
+/decisions human
+/decisions auto
+/decisions @Architect
+```
+
+`human` is the default. `auto` authorizes the working agents to consult appropriate specialists
+and resolve critical decisions. `@agent_name` delegates those decisions to one named agent.
+The web editor's native agent mention also works. The ticket's human creator/requester, its
+human project lead, and workspace owners/admins may change the policy. Agent task credentials
+cannot change it. Invalid, inaccessible, archived, unconfigured, or ambiguous agent selections
+leave the policy unchanged.
+
+Child tickets inherit the current root policy, including children without their own project
+workflow. Post changes on the root, not a child. Reparenting changes which flow a ticket belongs
+to. Commands are saved with the policy in one database transaction, remain in the comment audit
+history, and cannot be edited or deleted. Post `/decisions human` to revoke automatic decisions.
+Quoted commands, issue descriptions, and metadata do not set policy. Concurrent commands are
+serialized by the root issue's row lock; the last committed command wins.
+
+The backend injects recurring checkpoints into named workflow briefs: requirements, design and
+planning, each handoff, new evidence, and delivery/acceptance. Agents must record questions,
+options, recommendations, evidence, affected requirements/commit, decision owner, and resume
+steps. They route questions through native comment threads and release their execution slot
+while waiting. Routine work and independent tasks can continue. A material change reopens the
+relevant decision. `auto` does not bypass existing merge, deployment, production, spending,
+external-communication, review, or acceptance requirements.
+
+Agents read the current policy at each checkpoint with:
+
+```bash
+multica issue get FISK-123 --output json
+```
+
+The detail response's `decision_policy` contains `mode`, `root_issue_id`, `available`, and, after
+an explicit command, `configured_by` and `comment_id`. Agent mode also contains `agent_id` and
+`agent_name`. A selected agent becoming unavailable leaves mode unchanged with `available: false`;
+the instructions require waiting for a human rather than silently enabling automatic decisions.
+Older backends omit this field. Policy-read failures must not be treated as automatic approval.
+
+Policy changes apply to pending and future decisions when an agent next checks the policy.
+They do not start a run, redirect an already running turn, resolve a question, or advance a blocked
+ticket. Resume work through the existing assignment/comment workflow. The server enforces policy
+ownership and persistence. Identifying critical decisions, routing questions, and observing the
+checkpoints are agent instructions, not a database-enforced status-transition lock.
+
+This feature ships in the fork's backend, including migration 669, and is built by the standard
+setup/update scripts. It needs no separate sidecar, CLI update, or per-agent configuration.

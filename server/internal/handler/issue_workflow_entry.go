@@ -253,7 +253,7 @@ func (h *Handler) workflowHandoffBrief(ctx context.Context, issue db.Issue, hand
 	}
 	in := h.workflowBriefInput(ctx, issue, hand.def, hand.project)
 	in.StatusKey = hand.step.StatusKey
-	return issueworkflow.Brief(in)
+	return issueworkflow.Brief(in) + h.decisionPolicyBrief(ctx, issue)
 }
 
 // workflowBriefInput describes an issue at its current status under its
@@ -363,6 +363,13 @@ func (h *Handler) claimProjectWorkflow(ctx context.Context, issue db.Issue, task
 		return nil
 	}
 	if def == nil || (def.IsDefault && !def.HandsOffAnywhere()) {
+		policy, _, err := h.effectiveDecisionPolicy(ctx, issue)
+		if err != nil {
+			return &TaskProjectWorkflowData{Brief: h.decisionPolicyBrief(ctx, issue)}
+		}
+		if policy.CommentID != "" {
+			return &TaskProjectWorkflowData{Brief: renderDecisionPolicyBrief(policy, uuidToString(issue.ID))}
+		}
 		return nil
 	}
 	in := h.workflowBriefInput(ctx, issue, *def, project)
@@ -377,7 +384,7 @@ func (h *Handler) claimProjectWorkflow(ctx context.Context, issue db.Issue, task
 			in.AssigneeName = h.actorDisplayName(ctx, issue.WorkspaceID, issue.AssigneeType.String, issue.AssigneeID)
 		}
 	}
-	return &TaskProjectWorkflowData{Brief: issueworkflow.Brief(in), stepMoved: stepMoved}
+	return &TaskProjectWorkflowData{Brief: issueworkflow.Brief(in) + h.decisionPolicyBrief(ctx, issue), stepMoved: stepMoved}
 }
 
 // taskRunsForAssignee reports whether a run works on the issue as its

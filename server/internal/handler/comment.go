@@ -1740,6 +1740,10 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 
 	// Determine author identity: agent (via X-Agent-ID header) or member.
 	authorType, authorID := h.resolveActor(r, userID, uuidToString(issue.WorkspaceID))
+	decisionPolicy, ok := h.prepareDecisionCommand(w, r, issue, req, authorType, authorID)
+	if !ok {
+		return
+	}
 
 	// sourceTaskID captures the agent's currently-executing task when it posts
 	// via the CLI (X-Task-ID header). Stamping it on the comment row keeps the
@@ -1910,7 +1914,17 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		created, err = wakeupWrite(h, r, func(q *db.Queries) (db.CreateCommentRow, error) {
-			return q.CreateComment(r.Context(), createParams)
+			created, err := q.CreateComment(r.Context(), createParams)
+			if err != nil || decisionPolicy == nil {
+				return created, err
+			}
+			decisionPolicy.CommentID = uuidToString(created.ID)
+			policyJSON, err := json.Marshal(decisionPolicy)
+			if err != nil {
+				return created, err
+			}
+			_, err = q.SetIssueDecisionPolicy(r.Context(), db.SetIssueDecisionPolicyParams{IssueID: issue.ID, WorkspaceID: issue.WorkspaceID, Policy: policyJSON})
+			return created, err
 		})
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -1997,7 +2011,7 @@ func isNoteComment(content string) bool {
 // steer names the running turns the author chose: a recipient whose chosen
 // turn is still running receives this comment there instead of a follow-up run.
 func (h *Handler) triggerTasksForComment(ctx context.Context, issue db.Issue, comment db.Comment, parentComment *db.Comment, actorType, actorID, originatorUserID string, suppressAgentIDs []pgtype.UUID, steer commentSteerRequest) []CommentTriggerOutcome {
-	if isNoteComment(comment.Content) {
+	if isNoteComment(comment.Content) || isDecisionCommand(comment.Content) {
 		return nil
 	}
 	triggers, targets := h.computeCommentAgentTriggers(ctx, issue, comment.Content, parentComment, actorType, actorID, commentTriggerComputeOptions{
@@ -2678,7 +2692,7 @@ func (h *Handler) computeCommentAgentTriggers(ctx context.Context, issue db.Issu
 		opts.ThreadCommentID = parentComment.ID
 	}
 
-	if isNoteComment(content) {
+	if isNoteComment(content) || isDecisionCommand(content) {
 		return nil, nil
 	}
 
@@ -3398,6 +3412,11 @@ func (h *Handler) UpdateComment(w http.ResponseWriter, r *http.Request) {
 	// rejects before the empty check, so an edit that introduces such a byte
 	// can't 500 (GH #5388).
 	req.Content = sanitizeNullBytes(req.Content)
+	if isDecisionCommand(existing.Content) || isDecisionCommand(req.Content) {
+		writeError(w, http.StatusConflict, "decision commands cannot be edited; post a new /decisions comment on the root ticket")
+		return
+	}
+
 	if req.ContentBase != nil {
 		sanitized := sanitizeNullBytes(*req.ContentBase)
 		req.ContentBase = &sanitized
@@ -3644,6 +3663,10 @@ func (h *Handler) DeleteComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if isDecisionCommand(comment.Content) {
+		writeError(w, http.StatusConflict, "decision commands are retained for audit; post /decisions human to revoke autonomy")
+		return
+	}
 	member, ok := h.workspaceMember(w, r, workspaceID)
 	if !ok {
 		return
@@ -3982,7 +4005,7 @@ func (h *Handler) retriggerCancelledTaskSurvivors(ctx context.Context, issue db.
 
 	for i := range comments {
 		comment := comments[i]
-		if isNoteComment(comment.Content) {
+		if isNoteComment(comment.Content) || isDecisionCommand(comment.Content) {
 			continue
 		}
 		// Platform recovery comments bypass generic member/agent routing. If

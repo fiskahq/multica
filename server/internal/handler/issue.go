@@ -39,13 +39,14 @@ import (
 
 // IssueResponse is the JSON response for an issue.
 type IssueResponse struct {
-	ID          string  `json:"id"`
-	WorkspaceID string  `json:"workspace_id"`
-	Number      int32   `json:"number"`
-	Identifier  string  `json:"identifier"`
-	Title       string  `json:"title"`
-	Description *string `json:"description"`
-	Status      string  `json:"status"`
+	DecisionPolicy *DecisionPolicy `json:"decision_policy,omitempty"`
+	ID             string          `json:"id"`
+	WorkspaceID    string          `json:"workspace_id"`
+	Number         int32           `json:"number"`
+	Identifier     string          `json:"identifier"`
+	Title          string          `json:"title"`
+	Description    *string         `json:"description"`
+	Status         string          `json:"status"`
 	// StatusCategory encodes lifecycle using the legacy seven-value wire enum. It is
 	// omitted when an endpoint cannot resolve a custom status, so consumers must
 	// fall back to their catalog rather than treat a blank as "no category".
@@ -2585,6 +2586,15 @@ func (h *Handler) GetIssue(w http.ResponseWriter, r *http.Request) {
 	}
 	prefix := h.getIssuePrefix(r.Context(), issue.WorkspaceID)
 	resp := issueToResponse(issue, prefix)
+	policy, root, policyErr := h.effectiveDecisionPolicy(r.Context(), issue)
+	if policyErr != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load decision policy")
+		return
+	}
+	if !h.requireIssueIDVisible(w, r, uuidToString(issue.WorkspaceID), root.ID, http.StatusForbidden, "decision policy root is not accessible") {
+		return
+	}
+	resp.DecisionPolicy = &policy
 	h.fillStatusCategory(r.Context(), issue.WorkspaceID, hidden, &resp)
 	detailLabels := h.labelsByIssue(r.Context(), issue.WorkspaceID, []pgtype.UUID{issue.ID})[uuidToString(issue.ID)]
 	if detailLabels == nil {
