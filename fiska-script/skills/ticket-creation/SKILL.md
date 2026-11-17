@@ -10,6 +10,12 @@ and independently verifiable children. Follow the project's ticket conventions a
 Multica run brief. Quick-create's single-create contract and field rules take precedence over this
 ordinary refinement workflow.
 
+Every ticket requires a corresponding Jira ticket before development, unless the user explicitly
+opts out. During intake, verify an existing scope match or create the missing Jira ticket, record
+its primary key and URL in Multica, and add the Multica backlink in Jira. Follow the managed Jira
+policy for duplicate checks, user exemptions and blocked intake. Quick-create may capture the
+Multica ticket first; unresolved Jira intake must be completed before implementation is dispatched.
+
 ## Establish the facts
 
 Read the user's request and existing issue/thread, project context, linked documentation, relevant

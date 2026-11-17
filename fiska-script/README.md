@@ -657,12 +657,51 @@ itself and does not interrupt current runs.
 The release agent must create or update the task PR and verify its open state, URL, target branch
 and reviewed head SHA before Acceptance. Final branches always use
 `feature/<JIRA-KEY>-<short-description>`, for example `feature/MS-123-transaction-reporting`.
-When there is no linked Jira ticket, use the originating Multica identifier, for example
+Only when the user explicitly opted out of Jira, use the originating Multica identifier, for example
 `feature/FISK-42-transaction-reporting`. The description is lowercase kebab-case and the issue key
 is uppercase. Fixes and maintenance also use `feature/`. The reviewed SHA remains unchanged.
 Existing PRs and active/dirty worktrees retain the shared skill's preservation rules; setup does
 not rename current Git branches. Merge and deployment require separate task authorization.
 These are verified agent instructions, not a server-enforced status gate.
+
+## Jira prerequisite for every ticket
+
+Every Multica ticket needs a matching Jira ticket unless the user explicitly opts out. Intake
+searches for an existing scope match or creates the missing ticket, records the primary Jira key
+and URL in Multica, and adds a Multica backlink in Jira. Capture can happen first, including manual
+and quick-create tickets; implementation must wait for the mapping or a cited user exemption.
+Missing access or an ambiguous Jira destination blocks implementation with an owner and resume step.
+`/decisions auto` does not opt out of Jira. Child tickets need a verified mapping for their scope.
+
+Agent setup, Architect, advisor and delivery setup apply this policy automatically. For an existing
+installation, or after adding agents/workflows manually, run:
+
+```bash
+python3 configure-jira-policy.py --dry-run
+python3 configure-jira-policy.py
+# From the fork's fiska-script folder, target a separate private deployment:
+python3 configure-jira-policy.py --deployment-dir /absolute/path/to/existing/setup
+```
+
+The installer updates agent/squad instructions, ticket-creation and delivery-handoff skills when
+present, and assigned nonterminal workflow checkpoints. Unassigned steps cannot store instructions
+in Multica; the coding agent's preflight still applies when work is assigned manually.
+It attaches the existing scoped
+`factory-jira-triage` write endpoint to Architect when available, preserving other attachments.
+Other agents can delegate Jira intake to Architect. A fresh install uses its configured Jira
+endpoint; enable writes in the relay wizard to allow creation. Missing write access blocks intake.
+The installer preserves routing, credentials and runtime
+settings, backs up changed text, and verifies readback. The background learner remains a tool-free
+draft reviewer; its captured tickets must also satisfy intake before any development. No historical
+Jira tickets are bulk-created. Existing active runs receive the policy on their next run; setup does
+not interrupt them. New roles/workflows added outside these installers need the command rerun.
+
+This uses native instructions, not a server-enforced creation or status-transition gate. Agents
+must follow the preflight; the API does not prevent a manual move into Development. Duplicate
+prevention uses existing-ticket lookup, a designated intake owner and recovery after uncertain
+creates; it is not a transactional cross-system uniqueness guarantee. Do not edit the same
+instructions while installing: read-before-write detects intervening edits but is not an atomic
+compare-and-swap. Review backups if an installation stops partway through.
 
 ## Docker disk maintenance
 

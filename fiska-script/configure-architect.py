@@ -69,11 +69,14 @@ def configure(mcp_names):
                 selected_servers.append(server)
             else:
                 print(f"No scoped {service} MCP registration found; continuing with native workspace context.")
+        writer = unique(servers, "factory-jira-triage")
+        if writer:
+            selected_servers.append(writer)
     else:
         selected_servers = [unique(servers, name) for name in dict.fromkeys(mcp_names)]
         if any(server is None for server in selected_servers):
             raise RuntimeError("A requested MCP server name was not found; no configuration was changed.")
-    instructions = (ROOT / "agents/architect/instructions.md").read_text()
+    instructions = provision.jira_instructions((ROOT / "agents/architect/instructions.md").read_text())
     content = (ROOT / "skills/ticket-creation/SKILL.md").read_text()
     skill_args = ["update", skill_id] if skill_id else ["create"]
     skill = command("skill", *skill_args, "--name", "ticket-creation", "--description",

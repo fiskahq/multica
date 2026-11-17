@@ -15,3 +15,4 @@ umask 077
 # Each configurator takes the operation lock and verifies its native updates.
 python3 "$MULTICA_SETUP_DIR/configure-delivery-pr.py"
 python3 "$MULTICA_SETUP_DIR/configure-delivery-branches.py"
+python3 "$MULTICA_SETUP_DIR/configure-jira-policy.py"

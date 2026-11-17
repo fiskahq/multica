@@ -10,3 +10,5 @@ require_env
 lock_operation
 umask 077
 python3 "$MULTICA_SETUP_DIR/configure-architect.py" "$@"
+unlock_operation
+python3 "$MULTICA_SETUP_DIR/configure-jira-policy.py"

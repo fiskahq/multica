@@ -54,7 +54,7 @@ def configure():
     supplements = [unique(skills, name) for name in
                    ("research-with-sources", "conventions", "architecture-designer", "domain-modeling")]
     content = (ROOT / "skills/implementation-planning/SKILL.md").read_text()
-    instructions = (ROOT / "agents/development-advisor/instructions.md").read_text()
+    instructions = provision.jira_instructions((ROOT / "agents/development-advisor/instructions.md").read_text())
     skill = command("skill", *(["update", skill_id] if skill_id else ["create"]),
                     "--name", "implementation-planning", "--description",
                     "Repository-grounded coding plans: file and symbol changes, contracts, sequencing and verification without writing code.",
