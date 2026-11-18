@@ -14,6 +14,8 @@ import urllib.parse
 import urllib.request
 import uuid
 
+from docx_text import DocumentError, MAX_DOCX, extract as extract_docx
+
 MAX_FILE = 128 * 1024
 KINDS = {'jira', 'confluence', 'email', 'other'}
 FIELDS = {'title', 'kind', 'proposal', 'source_quote', 'blocker', 'owner', 'resume'}
@@ -102,30 +104,32 @@ def scan(store, inbox, now=None):
     now = time.time() if now is None else now
     errors = []
     for path in sorted(Path(inbox).iterdir()):
-        if path.suffix.lower() not in {'.txt', '.md', '.vtt', '.srt'} or path.name.startswith('.'):
+        if path.suffix.lower() not in {'.txt', '.md', '.vtt', '.srt', '.docx'} or path.name.startswith(('.', '~$')):
             continue
         fd = None
+        limit = MAX_DOCX if path.suffix.lower() == '.docx' else MAX_FILE
         try:
             info = path.lstat()
             if not stat.S_ISREG(info.st_mode) or now - info.st_mtime < 10:
                 continue
             fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
             before = os.fstat(fd)
-            if not stat.S_ISREG(before.st_mode) or before.st_size > MAX_FILE:
+            if not stat.S_ISREG(before.st_mode) or before.st_size > limit:
                 raise ValueError('file_too_large_or_not_regular')
-            raw = os.read(fd, MAX_FILE + 1)
+            with os.fdopen(fd, 'rb', closefd=False) as source:
+                raw = source.read(limit + 1)
             after = os.fstat(fd)
             if (before.st_ino, before.st_size, before.st_mtime_ns) != (after.st_ino, after.st_size, after.st_mtime_ns):
                 continue
-            if len(raw) != after.st_size or len(raw) > MAX_FILE:
+            if len(raw) != after.st_size or len(raw) > limit:
                 raise ValueError('file_changed_or_too_large')
-            text = raw.decode('utf-8-sig')
+            text = extract_docx(raw, MAX_FILE) if path.suffix.lower() == '.docx' else raw.decode('utf-8-sig')
             if not text.strip() or '\x00' in text:
                 raise ValueError('empty_or_binary_file')
             if store.enqueue(path.name, text) is None:
                 break
         except (ValueError, OSError, UnicodeError) as error:
-            errors.append({'file': path.name, 'error': type(error).__name__})
+            errors.append({'file': path.name, 'error': str(error) if isinstance(error, DocumentError) else type(error).__name__})
         finally:
             if fd is not None:
                 os.close(fd)

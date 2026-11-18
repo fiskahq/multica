@@ -1021,10 +1021,16 @@ The transcript installer also applies that access policy. It preserves existing 
 attachments, and does not give new Jira release rights to admin specialists. Guy retains his existing
 release rights. Source documents cannot authorize writes, and personnel/financial privacy rules remain.
 
-Drop UTF-8 `.txt`, `.md`, `.vtt` or `.srt` files into **`<setup>/transcript-inbox/`**. Files must be at
-most 128 KiB. Audio, PDFs and recursive directories are not ingested. Copy through a temporary filename
+Drop Word `.docx` files or UTF-8 `.txt`, `.md`, `.vtt` and `.srt` files into
+**`<setup>/transcript-inbox/`**. Text files are limited to 128 KiB. Word files can be up to 10 MiB,
+with at most 8 MiB of document XML and 128 KiB of extracted text. Word paragraphs and tables are read
+in document order; formatting runs, tabs and line breaks are preserved as text. Deleted tracked text
+and field instructions are excluded. Images/OCR, headers, footers, comments and footnotes are not
+ingested. Legacy `.doc`, encrypted documents, audio, PDFs and recursive directories are unsupported.
+No Office application, macro execution or external-link fetching is involved. Copy through a temporary filename
 and rename it when finished; the scanner also waits ten seconds after the last modification and rejects
-symlinks. Originals stay in the inbox. Identical content, including a renamed copy, is processed once.
+symlinks and Office lock files. Originals stay in the inbox. Identical extracted text, including a
+renamed Word document or a matching text file, is processed once.
 Files over the limit or invalid UTF-8 appear in the status heartbeat. A bounded durable queue holds 100
 pending transcripts and at most 2,000 unresolved proposals; additional files wait in the inbox.
 
