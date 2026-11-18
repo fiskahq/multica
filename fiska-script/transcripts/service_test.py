@@ -1,10 +1,12 @@
 import copy
 import json
+import fcntl
 import os
 from pathlib import Path
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from service import Store, accepted, canonical, digest, execution, extraction, parse_review, replan, reviews, scan, tickets
 
@@ -183,6 +185,97 @@ class TranscriptTests(unittest.TestCase):
         scan(self.store, inbox)
         self.assertEqual(self.store.db.execute('SELECT name FROM files').fetchall()[0][0], 'valid.txt')
         self.assertEqual(self.store.db.execute('SELECT count(*) FROM files').fetchone()[0], 1)
+
+    def inbox_file(self, text='Saved transcript'):
+        inbox = self.root / 'inbox'
+        inbox.mkdir(exist_ok=True)
+        path = inbox / 'call.txt'
+        path.write_text(text)
+        os.utime(path, (0, 0))
+        return inbox, path
+
+    def test_ingestion_deletes_source_only_after_durable_commit(self):
+        inbox, path = self.inbox_file()
+        scan(self.store, inbox)
+        self.assertFalse(path.exists())
+        other = Store(self.root / 'queue.sqlite3')
+        try:
+            self.assertEqual(other.db.execute('SELECT text FROM files').fetchone()[0], 'Saved transcript')
+        finally:
+            other.db.close()
+        path.write_text('Saved transcript')
+        os.utime(path, (0, 0))
+        scan(self.store, inbox)
+        self.assertFalse(path.exists())
+        self.assertEqual(self.store.db.execute('SELECT count(*) FROM files').fetchone()[0], 1)
+
+    def test_queue_full_database_failure_and_invalid_file_keep_sources(self):
+        for outcome in (None, sqlite3.OperationalError('database full')):
+            with self.subTest(outcome=type(outcome)):
+                inbox, path = self.inbox_file()
+                with patch.object(self.store, 'enqueue', side_effect=outcome if isinstance(outcome, Exception) else None,
+                                  return_value=None):
+                    scan(self.store, inbox)
+                self.assertEqual(path.read_text(), 'Saved transcript')
+        path.write_bytes(b'\xff')
+        os.utime(path, (0, 0))
+        self.assertTrue(scan(self.store, inbox))
+        self.assertEqual(path.read_bytes(), b'\xff')
+
+    def test_new_upload_with_same_name_is_never_deleted(self):
+        inbox, path = self.inbox_file()
+        enqueue = self.store.enqueue
+        def replace(name, text):
+            path.write_text('New upload')
+            return enqueue(name, text)
+        with patch.object(self.store, 'enqueue', side_effect=replace):
+            scan(self.store, inbox)
+        self.assertEqual(path.read_text(), 'New upload')
+        self.assertEqual(self.store.db.execute('SELECT text FROM files').fetchone()[0], 'Saved transcript')
+
+    def test_changed_claim_is_retained_without_overwriting_new_upload(self):
+        inbox, path = self.inbox_file()
+        enqueue = self.store.enqueue
+        def modify(name, text):
+            claimed = next((inbox / '.ingesting').glob('*/call.txt'))
+            claimed.write_text('Changed while ingesting')
+            path.write_text('New upload')
+            return enqueue(name, text)
+        with patch.object(self.store, 'enqueue', side_effect=modify):
+            errors = scan(self.store, inbox)
+        self.assertEqual(path.read_text(), 'New upload')
+        claims = list((inbox / '.ingesting').glob('*/call.txt'))
+        self.assertEqual(len(claims), 1)
+        self.assertEqual(claims[0].read_text(), 'Changed while ingesting')
+        self.assertTrue(any(e['error'] == 'newer_upload_exists_original_retained_for_recovery' for e in errors))
+
+    def test_crash_after_claim_or_commit_is_recovered(self):
+        for committed in (False, True):
+            with self.subTest(committed=committed):
+                inbox, path = self.inbox_file()
+                claim = inbox / '.ingesting' / 'interrupted'
+                claim.mkdir(parents=True)
+                path.rename(claim / path.name)
+                if committed:
+                    self.store.enqueue(path.name, 'Saved transcript')
+                scan(self.store, inbox)
+                self.assertFalse(claim.exists())
+                self.assertFalse(path.exists())
+                self.assertEqual(self.store.db.execute('SELECT count(*) FROM files').fetchone()[0], 1)
+
+    def test_recovery_does_not_touch_another_workers_locked_claim(self):
+        inbox, path = self.inbox_file()
+        claim = inbox / '.ingesting' / 'active'
+        claim.mkdir(parents=True)
+        path.rename(claim / path.name)
+        lock = os.open(claim, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            scan(self.store, inbox)
+            self.assertEqual((claim / path.name).read_text(), 'Saved transcript')
+            self.assertEqual(self.store.db.execute('SELECT count(*) FROM files').fetchone()[0], 0)
+        finally:
+            os.close(lock)
 
     def test_extraction_requires_real_source_quote(self):
         self.store.enqueue('call.txt', DRAFT['source_quote'])

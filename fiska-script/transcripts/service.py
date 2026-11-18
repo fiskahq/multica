@@ -100,39 +100,110 @@ class Store:
             self.db.execute('COMMIT')
 
 
+def file_version(info):
+    return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+
+
+def ingest_claim(store, path, now):
+    """Delete only the claimed file, after the queue commit and unchanged-file checks."""
+    limit = MAX_DOCX if path.suffix.lower() == '.docx' else MAX_FILE
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        before = os.fstat(fd)
+        if not stat.S_ISREG(before.st_mode) or now - before.st_mtime < 10:
+            return True
+        if before.st_size > limit:
+            raise ValueError('file_too_large')
+        with os.fdopen(fd, 'rb', closefd=False) as source:
+            raw = source.read(limit + 1)
+        after = os.fstat(fd)
+        if file_version(before) != file_version(after):
+            return True
+        if len(raw) != after.st_size or len(raw) > limit:
+            raise ValueError('file_changed_or_too_large')
+        text = extract_docx(raw, MAX_FILE) if path.suffix.lower() == '.docx' else raw.decode('utf-8-sig')
+        if not text.strip() or '\x00' in text:
+            raise ValueError('empty_or_binary_file')
+        if store.enqueue(path.name, text) is None:
+            return False
+        # A replacement upload at the original name is outside this private claim directory.
+        if file_version(os.fstat(fd)) == file_version(after) == file_version(path.lstat()):
+            path.unlink()
+        return True
+    finally:
+        os.close(fd)
+
+
 def scan(store, inbox, now=None):
     now = time.time() if now is None else now
+    inbox = Path(inbox)
+    staging = inbox / '.ingesting'
+    staging.mkdir(mode=0o700, exist_ok=True)
+    if staging.is_symlink():
+        raise ValueError('invalid_ingestion_directory')
     errors = []
-    for path in sorted(Path(inbox).iterdir()):
+    # Recover interrupted claims first. Each directory lock covers recovery and ingestion.
+    claims = [(p, None) for p in sorted(staging.iterdir()) if p.is_dir() and not p.is_symlink()]
+    for path in sorted(inbox.iterdir()):
         if path.suffix.lower() not in {'.txt', '.md', '.vtt', '.srt', '.docx'} or path.name.startswith(('.', '~$')):
             continue
-        fd = None
-        limit = MAX_DOCX if path.suffix.lower() == '.docx' else MAX_FILE
         try:
             info = path.lstat()
-            if not stat.S_ISREG(info.st_mode) or now - info.st_mtime < 10:
+        except FileNotFoundError:
+            continue
+        if stat.S_ISREG(info.st_mode) and now - info.st_mtime >= 10:
+            claims.append((None, path))
+    for claim, original in claims:
+        lock = None
+        acquired = False
+        retained = None
+        keep_scanning = True
+        try:
+            if original is not None:
+                claim = staging / uuid.uuid4().hex
+                claim.mkdir(mode=0o700)
+            lock = os.open(claim, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                acquired = True
+            except BlockingIOError:
                 continue
-            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-            before = os.fstat(fd)
-            if not stat.S_ISREG(before.st_mode) or before.st_size > limit:
-                raise ValueError('file_too_large_or_not_regular')
-            with os.fdopen(fd, 'rb', closefd=False) as source:
-                raw = source.read(limit + 1)
-            after = os.fstat(fd)
-            if (before.st_ino, before.st_size, before.st_mtime_ns) != (after.st_ino, after.st_size, after.st_mtime_ns):
-                continue
-            if len(raw) != after.st_size or len(raw) > limit:
-                raise ValueError('file_changed_or_too_large')
-            text = extract_docx(raw, MAX_FILE) if path.suffix.lower() == '.docx' else raw.decode('utf-8-sig')
-            if not text.strip() or '\x00' in text:
-                raise ValueError('empty_or_binary_file')
-            if store.enqueue(path.name, text) is None:
-                break
-        except (ValueError, OSError, UnicodeError) as error:
-            errors.append({'file': path.name, 'error': str(error) if isinstance(error, DocumentError) else type(error).__name__})
+            if original is not None:
+                # Rename claims the directory entry atomically; never unlink the upload name.
+                try:
+                    original.rename(claim / original.name)
+                except FileNotFoundError:
+                    continue
+                os.fsync(lock)
+            files = list(claim.iterdir())
+            if len(files) > 1:
+                raise ValueError('invalid_ingestion_claim')
+            if files:
+                retained = files[0]
+                keep_scanning = ingest_claim(store, retained, now)
+        except (ValueError, OSError, sqlite3.Error) as error:
+            errors.append({'file': original.name if original else str(claim.relative_to(inbox)),
+                           'error': str(error) if isinstance(error, DocumentError) else type(error).__name__})
         finally:
-            if fd is not None:
-                os.close(fd)
+            if acquired:
+                # A failed/changed/full-queue input returns without overwriting a newer upload.
+                if retained is not None and (retained.exists() or retained.is_symlink()):
+                    try:
+                        os.link(retained, inbox / retained.name, follow_symlinks=False)
+                        retained.unlink()
+                    except FileExistsError:
+                        errors.append({'file': str(retained.relative_to(inbox)),
+                                       'error': 'newer_upload_exists_original_retained_for_recovery'})
+                    except OSError as error:
+                        errors.append({'file': str(retained.relative_to(inbox)), 'error': type(error).__name__})
+                try:
+                    claim.rmdir()
+                except OSError:
+                    pass  # Nonempty claims are recovered on the next scan.
+            if lock is not None:
+                os.close(lock)
+        if not keep_scanning:
+            break
     return errors
 
 

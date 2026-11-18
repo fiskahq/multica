@@ -10,7 +10,7 @@ services:
       - ${TRANSCRIPT_SOURCE_DIR:-./transcripts}:/app:ro
       - ./transcript-private/config.json:/run/transcripts/config.json:ro
       - ./transcript-private/data:/data
-      - ./transcript-inbox:/inbox:ro
+      - ./transcript-inbox:/inbox
     read_only: true
     tmpfs:
       - /tmp:rw,nosuid,nodev,size=32m,mode=1777

@@ -1029,8 +1029,15 @@ and field instructions are excluded. Images/OCR, headers, footers, comments and 
 ingested. Legacy `.doc`, encrypted documents, audio, PDFs and recursive directories are unsupported.
 No Office application, macro execution or external-link fetching is involved. Copy through a temporary filename
 and rename it when finished; the scanner also waits ten seconds after the last modification and rejects
-symlinks and Office lock files. Originals stay in the inbox. Identical extracted text, including a
-renamed Word document or a matching text file, is processed once.
+symlinks and Office lock files. Publish finished files by renaming them into the inbox; do not edit
+them in place after dropping them. The worker atomically claims each file in a private `.ingesting/`
+subdirectory, saves its extracted text to the durable queue, then deletes the source file. Deletion
+does not wait for model analysis or action approval; extracted text and action records remain saved.
+Identical extracted text, including a renamed Word document or matching text file, is processed once;
+the duplicate source is also removed after the existing saved text is confirmed. Invalid inputs,
+queue backpressure and failed saves retain their source for retry. Interrupted claims recover after
+restart. Failed or changed inputs return to the inbox without overwriting newer uploads; when a
+newer file already uses that name, the original remains in `.ingesting/` and its path appears in status.
 Files over the limit or invalid UTF-8 appear in the status heartbeat. A bounded durable queue holds 100
 pending transcripts and at most 2,000 unresolved proposals; additional files wait in the inbox.
 

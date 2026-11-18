@@ -95,6 +95,10 @@ class DocxTests(unittest.TestCase):
             try:
                 errors = scan(store, inbox)
                 self.assertEqual(errors, [{'file': 'bad.docx', 'error': 'docx_invalid_archive'}])
+                self.assertFalse((inbox / 'call.DOCX').exists())
+                self.assertFalse((inbox / 'copy.txt').exists())
+                self.assertTrue((inbox / 'bad.docx').exists())
+                self.assertTrue((inbox / '~$call.docx').exists())
                 rows = store.db.execute('SELECT name,text FROM files').fetchall()
                 self.assertEqual([tuple(r) for r in rows], [('call.DOCX', text)])
             finally:
