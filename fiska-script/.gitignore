@@ -19,3 +19,6 @@ collaboration-tools-state.json
 wizard-state.json
 wizard-relay-state.json
 .wizard-*
+transcript-state.json
+transcript-private/
+transcript-inbox/

@@ -25,7 +25,10 @@ def verify_backend(version):
     ref = match[1] if match else version
     if not ref or not re.fullmatch(r"[a-zA-Z0-9._-]+", ref):
         raise RuntimeError("Backend has no verifiable source version; deploy the synced fork before enabling learning.")
-    result = subprocess.run(["git", "-C", str(ROOT / ".."), "merge-base", "--is-ancestor",
+    repository = ROOT.parent
+    if not (repository / "server").is_dir():
+        repository = repository / "multica"
+    result = subprocess.run(["git", "-C", str(repository), "merge-base", "--is-ancestor",
                              PRIVATE_AUTOPILOT_FIX, ref], capture_output=True)
     if result.returncode:
         raise RuntimeError("The running backend predates private Autopilot protection. Deploy the synced fork before enabling learning; the learner agent is prepared but no runs were started.")

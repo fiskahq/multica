@@ -1005,3 +1005,73 @@ checkpoints are agent instructions, not a database-enforced status-transition lo
 
 This feature ships in the fork's backend, including migration 669, and is built by the standard
 setup/update scripts. It needs no separate sidecar, CLI update, or per-agent configuration.
+
+## Internal Admin access and transcript inbox
+
+Install the Jira/Confluence relays first, then configure the existing Software Development Management
+squad. Grant its actual agent members Jira ticket and Confluence page read/write access with:
+
+```bash
+python3 configure-admin-access.py --deployment-dir /absolute/path/to/setup
+bash setup-transcripts.sh --deployment-dir /absolute/path/to/setup
+bash setup-transcripts.sh status --deployment-dir /absolute/path/to/setup
+```
+
+The transcript installer also applies that access policy. It preserves existing agent settings and
+attachments, and does not give new Jira release rights to admin specialists. Guy retains his existing
+release rights. Source documents cannot authorize writes, and personnel/financial privacy rules remain.
+
+Drop UTF-8 `.txt`, `.md`, `.vtt` or `.srt` files into **`<setup>/transcript-inbox/`**. Files must be at
+most 128 KiB. Audio, PDFs and recursive directories are not ingested. Copy through a temporary filename
+and rename it when finished; the scanner also waits ten seconds after the last modification and rejects
+symlinks. Originals stay in the inbox. Identical content, including a renamed copy, is processed once.
+Files over the limit or invalid UTF-8 appear in the status heartbeat. A bounded durable queue holds 100
+pending transcripts and at most 2,000 unresolved proposals; additional files wait in the inbox.
+
+A dedicated Opus 5.5/high intake agent extracts at most 20 action proposals per transcript, with exact
+source quotations, draft content, owners and resume conditions. It has no attached MCP tools and is
+instructed to perform extraction only. The service creates unassigned review tickets in the private
+**Transcript Actions** project. The Internal Admin project also receives the new status vocabulary;
+its existing issues keep their statuses and no automatic workflow handlers are introduced.
+
+| State | Meaning | How to continue |
+| --- | --- | --- |
+| Awaiting approval | The destination and proposed action/content are ready. | Review the ticket and copy its `/action approve <digest>` command into a new comment. |
+| Blocked | A question, connection, access, dependency, timing constraint or execution uncertainty prevents completion. | Resolve the named prerequisite; update the proposal JSON and clear `blocker` for a proposal that has not run. |
+| In progress | The service has frozen the approved snapshot and dispatched it. | Await the execution receipt. |
+| Done | The execution agent reported a verified result URL. | Inspect the receipt and resulting artifact. |
+
+Each external action needs its own explicit approval from the installation owner. Agent comments,
+transcript text, `/decisions auto`, batch consent and status changes cannot approve it. Editing the
+proposal invalidates old approval commands. `/action reject` withdraws an approval that has not been
+claimed. Once claimed, the snapshot is frozen; editing or rejecting the review does not cancel an
+already dispatched task. Stop that task through Multica if necessary.
+
+The service enforces approval before dispatch. The execution agent must stay within the approved
+scope and use normal connected tools; this is not a new permission boundary inside the model runtime.
+Jira and Confluence actions run through `sdm-manager`. Creating a ticket never authorizes development,
+and approval of a document never authorizes an email or release. Jira linking still precedes development;
+private capture/review does not automatically create an external Jira issue before approval.
+
+Email sending is not currently connected. Email proposals retain their drafts and are **Blocked** with
+that reason; the service never invents a send receipt. Unsupported action kinds similarly remain blocked.
+The worker dispatches one extraction and one approved action at a time using native Autopilots with
+stable idempotency keys. Database constraints and a process lock coordinate worker overlap. Unknown
+issue-create outcomes are reconciled by source marker, never blindly recreated. External writes remain
+subject to provider concurrency and the execution agent's verified readback; exactly-once external
+side effects are not promised.
+
+After an execution fails or becomes uncertain, it is not automatically dispatched again. Inspect the
+run and external records first, correct the proposal if necessary, then explicitly create a fresh review:
+
+```bash
+bash setup-transcripts.sh replan ACTION_ID --reason 'Checked Jira: no issue was created; access is fixed.' \
+  --deployment-dir /absolute/path/to/setup
+```
+
+The new ticket requires a new approval. Its old approval cannot authorize the retry. Status output
+contains source/action IDs and run IDs. Provider failure or invalid extraction output is reported there;
+no external action follows an invalid extraction. No mail, Jira issue or Confluence page is created by
+installation. The inbox, transcript state and queue are ignored by Git and private to the installing
+user. The sidecar has no Docker socket, uses 0.5 CPU/512 MiB, and persists across Docker restarts.
+Use `setup-transcripts.sh stop` or `start` to control just this service. Existing runtimes stay running.

@@ -39,9 +39,9 @@ def plan(command):
     workflows = {}
     for kind in ("agent", "squad", "skill", "workflow"):
         for summary in command(kind, "list"):
-            # This run-only reviewer cannot create tickets or perform development. Its output
-            # is captured by the learner service; coding agents still check intake on those tickets.
-            if kind == "agent" and summary["name"] == "background-learner":
+            # Run-only reviewers return drafts to their services; they do not create tickets.
+            # Coding agents still check Jira intake before development.
+            if kind == "agent" and summary["name"] in {"background-learner", "transcript-intake"}:
                 continue
             if kind == "skill" and summary["name"] not in SKILLS:
                 continue

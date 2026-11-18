@@ -124,3 +124,13 @@ grep -q -- '--profile relay --profile runtime --profile qa stop' "$TEST_DOCKER_L
 bash update.sh >/dev/null
 grep -q 'build --pull --no-cache backend runtime qa-docker mcp-relay' "$TEST_DOCKER_LOG"
 printf 'PASS: enabled relay starts with the app, stops with the stack, and is rebuilt on update\n'
+
+mkdir -p transcript-private
+printf '{}\n' > transcript-private/config.json
+: > "$TEST_DOCKER_LOG"
+bash sandbox.sh start-runtime >/dev/null
+grep -q -- '--profile transcripts' "$TEST_DOCKER_LOG"
+grep -q 'up -d --no-deps transcript-intake' "$TEST_DOCKER_LOG"
+bash sandbox.sh stop >/dev/null
+grep -q -- '--profile transcripts --profile runtime --profile qa stop' "$TEST_DOCKER_LOG"
+printf 'PASS: installed transcript worker participates in runtime start and stack stop\n'

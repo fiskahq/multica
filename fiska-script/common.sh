@@ -45,6 +45,11 @@ compose() {
     extra+=(-f "$MULTICA_SETUP_DIR/compose.learner.yml")
     profiles+=(--profile learner)
   fi
+  if [[ -f "$MULTICA_SETUP_DIR/transcript-private/config.json" ]]; then
+    extra+=(-f "$MULTICA_SETUP_DIR/compose.transcripts.yml")
+    profiles+=(--profile transcripts)
+  fi
+  TRANSCRIPT_UID="${TRANSCRIPT_UID:-$(id -u)}" TRANSCRIPT_GID="${TRANSCRIPT_GID:-$(id -g)}" \
   LEARNER_UID="${LEARNER_UID:-$(id -u)}" LEARNER_GID="${LEARNER_GID:-$(id -g)}" \
   docker compose --project-name "${MULTICA_PROJECT_NAME:-multica-sandbox}" \
     --project-directory "$MULTICA_SETUP_DIR" --env-file "$MULTICA_SETUP_DIR/.env" \
@@ -77,6 +82,9 @@ start_runtime() {
   fi
   if [[ -f "$MULTICA_SETUP_DIR/learner-private/config.json" ]]; then
     compose up -d --no-deps learner
+  fi
+  if [[ -f "$MULTICA_SETUP_DIR/transcript-private/config.json" ]]; then
+    compose up -d --no-deps transcript-intake
   fi
 }
 
