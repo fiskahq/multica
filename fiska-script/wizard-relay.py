@@ -15,6 +15,9 @@ spec = importlib.util.spec_from_file_location("wizard", ROOT / "wizard-config.py
 wizard = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(wizard)
 provision = wizard.provision_module()
+bridge_spec = importlib.util.spec_from_file_location("relay_stdio", ROOT / "relay-stdio.py")
+relay_stdio = importlib.util.module_from_spec(bridge_spec)
+bridge_spec.loader.exec_module(relay_stdio)
 
 
 def prompt(text, default=""):
@@ -57,7 +60,7 @@ def prepare():
         writes = yesno("Allow Jira write operations with this account?")
         config["jira"] = {"site": site, "email": {"file": "/run/relay-secrets/jira-email"},
                           "token": {"file": "/run/relay-secrets/jira-token"}, "allowWrites": writes}
-        config["rest"] = [{"name": "confluence", "description": "Confluence API",
+        config["rest"] = [{"name": "confluence", "description": "Confluence API. Read pages before edits, increment version.number, preserve unrelated content and verify the saved page.",
                            "baseUrl": site, "pathPrefixes": ["/wiki"], "allowWrites": False,
                            "auth": {"type": "basic", "username": config["jira"]["email"],
                                     "password": config["jira"]["token"]}}]
@@ -111,8 +114,8 @@ def register():
         if not re.fullmatch(r"/run/relay-secrets/[a-z][a-z0-9-]{0,79}", filename):
             raise RuntimeError("Wizard registration requires local endpoint token files.")
         token = (ROOT / "mcp-relay/.secrets" / Path(filename).name).read_text().strip()
-        spec = {"type": "http", "url": "http://mcp-relay:8080" + endpoint["path"],
-                "headers": {"Authorization": "Bearer " + token}}
+        spec = relay_stdio.server_config("http://mcp-relay:8080" + endpoint["path"],
+                                         {"Authorization": "Bearer " + token})
         command = ["update", server_id, team["workspace_id"], "--name", name] if server_id else ["add", name, team["workspace_id"]]
         provision.bridge("workspace", "mcp", *command, "--server-config-stdin", "--output", "json", data=json.dumps(spec))
         rows = provision.bridge("workspace", "mcp", "list", team["workspace_id"], "--output", "json")

@@ -59,8 +59,10 @@ class RelayWizardTest(unittest.TestCase):
             if args[:3] == ("workspace", "mcp", "add"):
                 self.assertIsNotNone(data)
                 payload = json.loads(data)
-                self.assertTrue(payload["url"].startswith("http://mcp-relay:8080/mcp/"))
-                token = payload["headers"]["Authorization"].split()[1]
+                self.assertEqual(payload["command"], "python3")
+                self.assertTrue(payload["env"]["MULTICA_RELAY_URL"].startswith("http://mcp-relay:8080/mcp/"))
+                token = json.loads(payload["env"]["MULTICA_RELAY_HEADERS"])["Authorization"].split()[1]
+                self.assertNotIn(token, repr(payload["args"]))
                 self.assertNotIn(token, repr(args))
                 servers.append({"id": str(len(servers)), "name": args[3]})
             return {}

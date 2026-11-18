@@ -687,7 +687,8 @@ The installer updates agent/squad instructions, ticket-creation and delivery-han
 present, and assigned nonterminal workflow checkpoints. Unassigned steps cannot store instructions
 in Multica; the coding agent's preflight still applies when work is assigned manually.
 It attaches the existing scoped
-`factory-jira-triage` write endpoint to Architect when available, preserving other attachments.
+`factory-jira-triage` write endpoint to Architect, development-release and Guy when available,
+preserving other attachments.
 Other agents can delegate Jira intake to Architect. A fresh install uses its configured Jira
 endpoint; enable writes in the relay wizard to allow creation. Missing write access blocks intake.
 The installer preserves routing, credentials and runtime
@@ -702,6 +703,51 @@ prevention uses existing-ticket lookup, a designated intake owner and recovery a
 creates; it is not a transactional cross-system uniqueness guarantee. Do not edit the same
 instructions while installing: read-before-write detects intervening edits but is not an atomic
 compare-and-swap. Review backups if an installation stops partway through.
+
+### Jira and other relay tools on Kiro v3
+
+Kiro v3 can declare HTTP and SSE MCP unsupported. Registering an HTTP endpoint then leaves its
+tools unavailable even though the agent's attachment is enabled. Docker setup uses
+`relay-stdio.py` to forward stdio MCP requests to the same scoped HTTP relay endpoints. The runtime
+image includes the adapter; the wizard and relay sync register stdio by default. Tool names,
+endpoint tokens, allowlists and Jira permissions remain the same. Headers travel in MCP environment
+configuration, never command arguments. The adapter rejects redirects and does not retry writes
+after a timeout or connection failure; agents must reconcile the result before retrying.
+
+For an existing running installation, install the adapter and convert its locally configured
+relay registrations without restarting the runtime:
+
+```bash
+python3 setup-relay-stdio.py --deployment-dir /absolute/path/to/existing/setup
+python3 configure-jira-policy.py --deployment-dir /absolute/path/to/existing/setup
+```
+
+The first command preserves registration IDs and agent attachments. The second ensures the intake,
+release and Guy roles have the scoped Jira writer. Fresh runs receive the new transport. Active runs
+keep their original tools until they finish. Supported ticket writes include creation, field edits,
+comments, assignment, transitions and issue links; existing restrictions on administrative and
+destructive operations remain in the relay. A configured tool does not override the task's scope.
+
+### Scoped Confluence writes and Jira release management
+
+After configuring Jira and running `setup-confluence-writes.sh`, run:
+
+```bash
+bash setup-collaboration-tools.sh --deployment-dir /absolute/path/to/existing/setup
+```
+
+This attaches the ticket writer, Confluence writer and a separate `factory-jira-release` tool to
+**Guy, Architect and development-release** when those agents exist. Other agents keep their current
+attachments and can delegate these operations. The background learner remains excluded. Setup
+backs up the relay configuration, briefly reloads only the main relay when required, installs the
+stdio adapter, and updates native instructions. Run it between active tasks; it does not restart
+the agent runtime. Repeating setup preserves registration IDs and does not duplicate attachments.
+
+The release tool can find, create, edit, release, unrelease, archive, unarchive and reorder project
+versions. It denies release deletion, merging and unrelated Jira writes. Ticket writers do not gain
+release management through their existing endpoint. Confluence edits use the current page version
+and must preserve unrelated content. All changes remain subject to the assigned task and the
+connected account's permissions. Existing sessions need a fresh run to receive newly attached tools.
 
 ## Docker disk maintenance
 

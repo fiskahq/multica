@@ -14,6 +14,7 @@ migration-state.json
 qa-state.json
 relay-state.json
 confluence-write-state.json
+collaboration-tools-state.json
 .relay-import-*/
 wizard-state.json
 wizard-relay-state.json

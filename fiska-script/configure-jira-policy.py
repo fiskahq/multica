@@ -20,6 +20,8 @@ provision = architect.provision
 CHECK = "Jira gate: verify a matching Jira ticket or explicit user opt-out before development."
 TERMINAL = {"done", "cancelled", "canceled"}
 SKILLS = {"ticket-creation", "delivery-handoff"}
+WRITE_AGENTS = {"Guy", "Architect", "development-release"}
+WRITE_SERVERS = ("factory-jira-triage", "factory-confluence-write", "factory-jira-release")
 
 
 def add_checkpoint(text):
@@ -44,15 +46,20 @@ def plan(command):
             if kind == "skill" and summary["name"] not in SKILLS:
                 continue
             row = command(kind, "get", summary["id"], *(["--with-content"] if kind == "skill" else []))
-            if kind == "agent" and row["name"] == "Architect":
+            if kind == "agent" and row["name"] in WRITE_AGENTS:
                 servers = command("workspace", "mcp", "list", row["workspace_id"])
-                writer = architect.unique(servers, "factory-jira-triage")
-                if writer:
-                    before_ids = sorted(s["id"] for s in command("agent", "mcp", "list", row["id"]))
+                before_ids = sorted(s["id"] for s in command("agent", "mcp", "list", row["id"])
+                                    if s.get("enabled", True))
+                for name in WRITE_SERVERS:
+                    writer = architect.unique(servers, name)
+                    if not writer:
+                        continue
                     if writer["id"] not in before_ids:
+                        after_ids = sorted([*before_ids, writer["id"]])
                         changes.append(dict(kind="agent_mcp", id=row["id"], name=row["name"],
                                             field="mcp_ids", server_id=writer["id"], before=before_ids,
-                                            after=sorted([*before_ids, writer["id"]])))
+                                            after=after_ids))
+                        before_ids = after_ids
             if kind == "workflow":
                 expected = copy.deepcopy(row["steps"])
                 for step in expected:
@@ -80,7 +87,8 @@ def plan(command):
 def read_change(command, change):
     kind, ident = change["kind"], change["id"]
     if kind == "agent_mcp":
-        return {"mcp_ids": sorted(s["id"] for s in command("agent", "mcp", "list", ident))}
+        return {"mcp_ids": sorted(s["id"] for s in command("agent", "mcp", "list", ident)
+                                  if s.get("enabled", True))}
     if kind == "workflow_step":
         return next(s for s in command("workflow", "get", ident)["steps"]
                     if s["status_key"] == change["status"])

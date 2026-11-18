@@ -30,8 +30,14 @@ def jira_instructions(text):
         # Do not silently overwrite a policy someone edited in Multica.
         if text[text.index(start):text.index(end) + len(end)] != policy:
             raise RuntimeError("Managed Jira policy was modified; reconcile before retrying.")
-        return text
-    return text.rstrip() + ("\n\n" if text.strip() else "") + policy
+    else:
+        text = text.rstrip() + ("\n\n" if text.strip() else "") + policy
+    access = (ROOT / "collaboration-tools-policy.md").read_text().strip()
+    if access not in text:
+        if "## Jira and Confluence task access" in text:
+            raise RuntimeError("Connected tool policy was modified; reconcile before retrying.")
+        text = text.rstrip() + "\n\n" + access
+    return text
 
 
 def agent_concurrency(name, default=None):

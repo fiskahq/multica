@@ -1,0 +1,40 @@
+{
+  "endpoint": {
+    "name": "jira_release",
+    "path": "/mcp/jira-release",
+    "token": {
+      "file": "/run/relay-secrets/endpoint-jira-release-token"
+    },
+    "allowTools": ["jira_release__request"]
+  },
+  "integration": {
+    "name": "jira_release",
+    "description": "Jira release management. Releases are project versions. GET /rest/api/3/project/KEY/version supports query/name and status filters with startAt/maxResults pagination; GET /rest/api/3/version/ID reads one version. Create with POST /rest/api/3/version using projectId and name. Update name, description, dates, released or archived with PUT /rest/api/3/version/ID. Reorder with POST /rest/api/3/version/ID/move. Read the current version and related issue counts before changes, preserve unrelated values, and verify writes. Publishing a PR does not authorize releasing a version. Delete, merge, project administration and issue writes are not allowed by this tool. Use the Jira ticket tool for fixVersions edits. Responses are wrapped in data.",
+    "baseUrl": "https://fiska.atlassian.net",
+    "pathPrefixes": ["/rest/api/3/project", "/rest/api/3/version"],
+    "auth": {
+      "type": "basic",
+      "username": {
+        "file": "/run/relay-secrets/jira-email"
+      },
+      "password": {
+        "file": "/run/relay-secrets/jira-token"
+      }
+    },
+    "allowWrites": true,
+    "writeRules": [
+      {
+        "method": "POST",
+        "pathPattern": "^/rest/api/3/version$"
+      },
+      {
+        "method": "PUT",
+        "pathPattern": "^/rest/api/3/version/[1-9][0-9]*$"
+      },
+      {
+        "method": "POST",
+        "pathPattern": "^/rest/api/3/version/[1-9][0-9]*/move$"
+      }
+    ]
+  }
+}

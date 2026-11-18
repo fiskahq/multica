@@ -14,7 +14,7 @@ class NativeFixture:
     def __init__(self):
         self.rows = {
             "agent": [{"id": "a", "name": "builder", "instructions": "Keep human guidance.",
-                       "max_concurrent_tasks": 3, "runtime_id": "runtime", "model": "model"},
+                       "workspace_id": "workspace", "max_concurrent_tasks": 3, "runtime_id": "runtime", "model": "model"},
                       {"id": "learner", "name": "background-learner", "instructions": "No tools."}],
             "squad": [{"id": "s", "name": "team", "instructions": "Leader rules.", "leader_id": "a"}],
             "skill": [{"id": "k", "name": "ticket-creation", "content": "Keep existing content."},
@@ -69,15 +69,29 @@ class NativeFixture:
 
 
 class JiraPolicyTests(unittest.TestCase):
-    def test_architect_gets_existing_scoped_writer_without_replacing_read_access(self):
+    def test_ticket_writer_gets_scoped_access_without_replacing_read_access(self):
         native = NativeFixture()
-        native.rows["agent"][0].update(name="Architect", workspace_id="workspace")
+        native.rows["agent"][0].update(name="Guy", workspace_id="workspace")
         with tempfile.TemporaryDirectory() as tmp:
             policy.configure(native.command, Path(tmp))
             self.assertEqual(native.attachments, [{"id": "jira-read"}, {"id": "jira-write"}])
             writes = len(native.writes)
             policy.configure(native.command, Path(tmp))
             self.assertEqual(len(native.writes), writes)
+
+    def test_collaboration_writers_are_limited_to_selected_roles(self):
+        for name in ("Guy", "Architect", "development-release", "development-builder", "background-learner"):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as tmp:
+                native = NativeFixture()
+                native.rows["agent"][0]["name"] = name
+                original = native.command
+                def command(kind, operation, *args, data=None):
+                    if kind == "workspace":
+                        return [{"id": server, "name": server} for server in policy.WRITE_SERVERS]
+                    return original(kind, operation, *args, data=data)
+                policy.configure(command, Path(tmp))
+                expected = 4 if name in {"Guy", "Architect", "development-release"} else 1
+                self.assertEqual(len(native.attachments), expected)
 
     def test_apply_and_rerun_preserve_configuration_and_back_up_originals(self):
         native = NativeFixture()
@@ -130,7 +144,7 @@ class JiraPolicyTests(unittest.TestCase):
         native.intervene = True
         with tempfile.TemporaryDirectory() as tmp, self.assertRaisesRegex(RuntimeError, "Concurrent edit"):
             policy.configure(native.command, Path(tmp))
-        self.assertEqual(native.writes, [])
+        self.assertNotIn(("agent", "update"), native.writes)
         self.assertEqual(native.rows["agent"][0]["instructions"], "Concurrent human edit.")
 
 

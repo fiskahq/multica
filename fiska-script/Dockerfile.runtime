@@ -21,6 +21,7 @@ RUN curl --fail --show-error --silent --location --retry 3 \
     && rm /tmp/install-kiro.sh
 
 USER node
+COPY --chown=node:node relay-stdio.py /opt/agent-tools/relay-stdio.py
 ARG CLAUDE_VERSION=latest
 ARG CODEX_VERSION=latest
 ARG OPENCODE_VERSION=latest
