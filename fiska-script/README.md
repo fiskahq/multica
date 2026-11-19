@@ -134,7 +134,8 @@ subsequent host login changes are not synchronized. To give Docker its own login
 
 For unattended jobs, generate a long-lived subscription token in your terminal with
 `claude setup-token`, then run `./setup-claude.sh --token` and paste it into the hidden prompt.
-Do not paste tokens into chat or put them in command arguments. The script stores the token in
+Copy the raw token without Markdown escaping, quotes or backslashes. The installer rejects
+formatted tokens. Do not paste tokens into chat or put them in command arguments. The script stores the token in
 `env.CLAUDE_CODE_OAUTH_TOKEN` in the runtime's persistent `~/.claude/settings.json`, with mode
 0600. New Claude processes load it without restarting the daemon. Existing processes keep their
 current authentication. Explicit agent API keys and other higher-priority authentication still

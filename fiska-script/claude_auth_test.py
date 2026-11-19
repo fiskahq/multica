@@ -48,6 +48,16 @@ class ClaudeAuthTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             auth.install(self.root, {'claudeAiOauth': self.login})
 
+    def test_escaped_or_formatted_token_does_not_replace_valid_settings(self):
+        path = self.root / 'settings.json'
+        path.write_text('{"env":{"KEEP":"yes"}}')
+        original = path.read_bytes()
+        for value in [r'sk-ant-oat01-test\_value', 'sk-ant-oat01-test.value',
+                      '"sk-ant-oat01-test"', 'sk-ant-oat01-test value']:
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                auth.install(self.root, {'token': value}, token=True)
+            self.assertEqual(path.read_bytes(), original)
+
     def test_bad_token_and_malformed_settings_are_preserved(self):
         path = self.root / 'settings.json'
         path.write_text('{broken')

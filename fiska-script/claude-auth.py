@@ -4,6 +4,7 @@ import getpass
 import json
 import os
 from pathlib import Path
+import re
 import sys
 import tempfile
 import time
@@ -40,8 +41,7 @@ def write_object(path, data):
 def install(directory, payload, token=False):
     if token:
         value = payload.get("token")
-        if (not isinstance(value, str) or not value.startswith("sk-ant-oat")
-                or any(c.isspace() or ord(c) < 32 for c in value)):
+        if (not isinstance(value, str) or not re.fullmatch(r"sk-ant-oat01-[A-Za-z0-9_-]+", value)):
             raise ValueError("Invalid setup token")
         path = directory / "settings.json"
         data = read_object(path)
@@ -73,8 +73,10 @@ def main():
     elif mode == "prompt-token":
         if not sys.stdin.isatty():
             raise ValueError("Run --token in a terminal for a hidden prompt")
-        value = getpass.getpass("Paste the claude setup-token token (hidden): ")
-        json.dump({"token": value.strip()}, sys.stdout)
+        value = getpass.getpass("Paste the claude setup-token token (hidden): ").strip()
+        if not re.fullmatch(r"sk-ant-oat01-[A-Za-z0-9_-]+", value):
+            sys.exit("Invalid token format. Copy the raw token from claude setup-token, without quotes, backslashes or Markdown formatting.")
+        json.dump({"token": value}, sys.stdout)
     elif mode in ("install-login", "install-token"):
         install(directory, json.load(sys.stdin), token=mode == "install-token")
     else:
