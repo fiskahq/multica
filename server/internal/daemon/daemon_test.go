@@ -563,6 +563,7 @@ func TestTaskMulticaEnvironmentIncludesPrivateConfigRoot(t *testing.T) {
 		"MULTICA_AGENT_NAME":           "agent-name",
 		"MULTICA_AGENT_ID":             "agent-test",
 		"MULTICA_TASK_ID":              "task-test",
+		"MULTICA_ISSUE_ID":             "",
 		"MULTICA_TASK_SLOT":            "3",
 		"TMPDIR":                       "/task/tmp",
 		"TMP":                          "/task/tmp",

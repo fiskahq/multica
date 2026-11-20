@@ -31,6 +31,10 @@ RUN npm install --global --prefix /opt/agent-tools \
       "@opencode/cli@${OPENCODE_VERSION}" \
     && npm cache clean --force
 
+COPY --chown=node:node --chmod=755 acceptance/docker-wrapper.py /opt/agent-tools/bin/docker
+COPY --chown=node:node --chmod=755 acceptance/cleanup.py /opt/agent-tools/acceptance-cleanup
+ENV MULTICA_ACCEPTANCE_CLEANUP_COMMAND=/opt/agent-tools/acceptance-cleanup
+
 ENV NPM_CONFIG_PREFIX=/home/node/.local
 ENV PATH=/opt/agent-tools/bin:/usr/local/bin:/home/node/.local/bin:$PATH
 ENV DISABLE_AUTOUPDATER=1

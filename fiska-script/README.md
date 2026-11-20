@@ -772,7 +772,35 @@ Inspect and clean regenerable Docker data without stopping agents:
 ./setup-docker-cleanup.sh --remove # Disable that schedule.
 ```
 
-Cleanup removes only dangling images older than 48 hours and old unused build cache. The cache
+Acceptance cleanup is automatic in the supplied runtime image. Once a ticket enters the
+`acceptance` status, a daemon worker checks it within about one minute and waits until its agent
+work finishes. A per-issue guard prevents a new task from starting during cleanup, including a
+new task that uses a different workspace directory. Returning the ticket to development can
+require reinstalling dependencies and rebuilding its test stack.
+
+Ordinary task Docker commands pass through an ownership wrapper: containers and direct builds
+get issue/workspace labels, and Compose projects get a stable ticket-specific name. Cleanup
+removes those containers, their anonymous volumes, owned named volumes/networks and unused
+built images from the `multica-qa` daemon. Shared pulled base images and build cache remain under
+periodic maintenance. Use `docker` from PATH; calling `/usr/local/bin/docker` or a remote Docker
+API directly bypasses ownership tagging. Explicit Compose project names are scoped to the
+current ticket, so obtain the effective name from `docker compose config` when needed.
+
+The same cleanup removes untracked dependency/cache directories (`node_modules`, `.next`,
+`.turbo`, `.venv`, `__pycache__`, `.pytest_cache`) from daemon-owned ticket workspaces.
+Source files, Git history, tracked files, nested repositories, symlink targets, output and logs
+are retained. Task metadata and a small cleanup receipt provide retry/idempotency state; no AI
+call or separate service is needed. Failed cleanup is retried, and a new completed task makes
+its resources eligible again. Old Compose resources are eligible only when their recorded
+working directory proves ownership; unlabelled resources with no ownership evidence are retained.
+Scratch directories outside the managed ticket workspace are not deleted automatically.
+
+The runtime image sets `MULTICA_ACCEPTANCE_CLEANUP_COMMAND` to its installed helper. Updating
+an existing runtime requires the rebuilt image and daemon restart; new installs get it by
+default. Removing that environment variable disables Acceptance cleanup. The helper receives
+only issue/workspace IDs and proven root paths, and runs under the daemon's cleanup guard.
+
+The separate scheduled maintenance below removes only dangling images older than 48 hours and old unused build cache. The cache
 size targets are 20 GB on the host and 10 GB in the separate QA Docker daemon. Recent and in-use
 records are retained, so these are best-effort targets rather than hard quotas. Tagged images,
 all containers, all volumes, repository workspaces, credentials and backups are preserved. Old
