@@ -811,6 +811,41 @@ guidance, and the Software Factory QA/Development steps when present. It backs u
 readback without changing workflow routing or starting tasks. These are agent instructions,
 not server-enforced test gates; they take effect on new runs. Existing runs are not interrupted.
 
+`./setup-factory-policy.sh` applies evidence-led intake and complete candidate review rounds to
+the existing team; `--dry-run` checks the planned changes. `setup-delivery.sh` includes it.
+Architect/planner/advisor record unobserved assumptions, observation slices, one behavior per PR,
+invariants, a finite fact list, first-candidate permutation tests and a written blocking bar.
+The target remains 3-6 files; **more than 15 hand-maintained changed files** requires David's
+explicit approval on the ticket. Tests, docs and configuration count; generated files are listed
+separately. Explicit existing scope exceptions remain valid. A no-new-tickets request also applies
+to automatic slice and follow-up creation.
+
+Code Review and Architecture Review have no native back route. Both complete their review of the
+same frozen SHA and pass their findings forward, including failures. Adversarial Review combines
+all three receipts and returns one blocker list, or advances to QA when none remain. Review stages
+remain sequential; this is not parallel scheduling or a server-validated verdict system. Direct
+issue status writes are still possible. The installer preserves handler identities, forward routes,
+QA fix planning and human Acceptance, verifies readback, and backs up changes under `backups/`.
+It does not restart current runs, whose existing prompts may still contain the old rules.
+
+The same installer installs `factory-mysql` in the runtime's persistent home, and runtime images
+include it. It runs the complete payment API and Nuvei adapter test projects on a private MySQL 8
+container with tmpfs storage, one CPU and a 2 GB memory limit. It records each exit status, logs,
+TRX files, candidate SHA and dirty state; it continues to the second suite after failure or timeout.
+It removes only that invocation's container on exit. Run from the runtime, where the `multica-qa`
+daemon's published loopback ports are reachable:
+
+```bash
+factory-mysql /path/to/candidate --docker-context multica-qa --output /path/to/new-evidence-dir
+```
+
+The evidence directory must not exist. The checkout needs its normal .NET prerequisites; the helper
+does not install SDKs, change source or supply missing suites. Inspect TRX skip counts as well as exit
+codes. Other repository-required tests still run separately. The helper does not implement the
+schema reuse tracked in FISK-190, and a card-not-present emulator does not establish terminal-flow
+coverage. The remaining baseline portability gap is recorded in
+[the factory audit](factory-policy/audit.md).
+
 The separate scheduled maintenance below removes only dangling images older than 48 hours and old unused build cache. The cache
 size targets are 20 GB on the host and 10 GB in the separate QA Docker daemon. Recent and in-use
 records are retained, so these are best-effort targets rather than hard quotas. Tagged images,

@@ -33,6 +33,7 @@ RUN npm install --global --prefix /opt/agent-tools \
 
 COPY --chown=node:node --chmod=755 acceptance/docker-wrapper.py /opt/agent-tools/bin/docker
 COPY --chown=node:node --chmod=755 acceptance/cleanup.py /opt/agent-tools/acceptance-cleanup
+COPY --chown=node:node --chmod=755 factory-mysql.py /opt/agent-tools/bin/factory-mysql
 ENV MULTICA_ACCEPTANCE_CLEANUP_COMMAND=/opt/agent-tools/acceptance-cleanup
 
 ENV NPM_CONFIG_PREFIX=/home/node/.local
