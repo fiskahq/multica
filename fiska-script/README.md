@@ -806,8 +806,8 @@ and a fix-planning consultation with `development-planner`; use `--dry-run` to p
 stopping at the first failure, records blocked/skipped checks separately, and publishes a complete
 report tied to the tested commit. Before returning defects to Development, QA requests a plan on
 the same issue and waits for the planner's response. The builder receives both the report and plan.
-The installer updates the QA, planner, builder and leader instructions, squad guidance, and the
-Software Factory QA/Development steps when present. It backs up changed fields and verifies
+The installer updates the QA, planner, builder and leader instructions, squad and testing-skill
+guidance, and the Software Factory QA/Development steps when present. It backs up changed fields and verifies
 readback without changing workflow routing or starting tasks. These are agent instructions,
 not server-enforced test gates; they take effect on new runs. Existing runs are not interrupted.
 

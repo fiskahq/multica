@@ -37,6 +37,15 @@ new SHA, and repeat required reviews and the full QA scope. No new human approva
 existing decision policy and explicit user instructions still apply. Squad leaders must obtain
 this report and plan before dispatching the builder for QA fixes.
 """
+TESTING = """## Complete QA coverage
+
+During QA, the complete repository- and ticket-required test scope is mandatory, regardless of
+whether focused checks pass or fail. This overrides the general advice above about broadening
+only after a pass. Disable fail-fast/bail where supported, run every independent suite, and
+retain each result. Report failed, blocked, skipped and not-run checks separately with evidence
+and the exact candidate SHA. Before implementation of QA fixes, follow the QA role's bounded
+development-planner consultation and return the complete report plus plan to the builder.
+"""
 
 
 def append_policy(text, policy):
@@ -77,6 +86,11 @@ def plan(command):
         squad = command("squad", "get", squad["id"])
         records.append(dict(kind="squad", id=squad["id"], before=squad.get("instructions") or "",
                             after=append_policy(squad.get("instructions"), IMPLEMENTATION)))
+    skill = named(command("skill", "list"), "delivery-testing", required=False)
+    if skill:
+        skill = command("skill", "get", skill["id"], "--with-content")
+        records.append(dict(kind="skill", id=skill["id"], before=skill.get("content") or "",
+                            after=append_policy(skill.get("content"), TESTING)))
     workflow = named(command("workflow", "list"), "Software Factory", required=False)
     if workflow:
         workflow = command("workflow", "get", workflow["id"])
@@ -101,7 +115,7 @@ def apply(command, records, deployment):
         provision.write_state(backup, records)
     for record in records:
         kind, ident = record["kind"], record["id"]
-        current = command(kind, "get", ident)
+        current = command(kind, "get", ident, *(["--with-content"] if kind == "skill" else []))
         if kind == "workflow":
             step = next(s for s in current["steps"] if s["status_key"] == record["status"])
             if step != record["step"]:
@@ -113,10 +127,15 @@ def apply(command, records, deployment):
             if command(kind, "get", ident)["steps"] != expected:
                 raise RuntimeError("Workflow readback differs from the instructions-only change.")
         else:
-            if (current.get("instructions") or "") != record["before"]:
+            field = "content" if kind == "skill" else "instructions"
+            if (current.get(field) or "") != record["before"]:
                 raise RuntimeError("Concurrent instruction edit detected; reconcile before retrying.")
-            command(kind, "update", ident, "--instructions", record["after"])
-            if command(kind, "get", ident).get("instructions") != record["after"]:
+            if kind == "skill":
+                command(kind, "update", ident, "--content-stdin", data=record["after"])
+            else:
+                command(kind, "update", ident, "--instructions", record["after"])
+            saved = command(kind, "get", ident, *(["--with-content"] if kind == "skill" else []))
+            if saved.get(field) != record["after"]:
                 raise RuntimeError("Saved instructions did not match.")
 
 
@@ -124,8 +143,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
-    def command(*args):
-        return provision.bridge(*args, "--output", "json")
+    def command(*args, data=None):
+        return provision.bridge(*args, "--output", "json", data=data)
     with (ROOT / ".operation.lock").open("w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         records = plan(command)

@@ -15,6 +15,7 @@ class PolicyTest(unittest.TestCase):
             "agent": [{"id": name, "name": name, "instructions": "Existing role instruction."}
                       for name in ("development-qa", "development-planner", "development-builder", "development-lead")],
             "squad": [{"id": "squad", "name": "Software Development", "instructions": "Keep squad guidance."}],
+            "skill": [{"id": "testing", "name": "delivery-testing", "content": "Keep testing guidance."}],
             "workflow": [{"id": "workflow", "name": "Software Factory", "steps": [
                 {"status_key": "qa", "handler": {"type": "agent", "id": "development-qa"},
                  "instructions": "Keep QA guidance.", "back_status_key": "development", "next_status_key": "delivery_preparation"},
@@ -24,7 +25,7 @@ class PolicyTest(unittest.TestCase):
             ]}],
         }
 
-    def command(self, kind, verb, *args):
+    def command(self, kind, verb, *args, data=None):
         rows = self.rows[kind]
         if verb == "list":
             return copy.deepcopy(rows)
@@ -35,7 +36,10 @@ class PolicyTest(unittest.TestCase):
             return copy.deepcopy(row)
         row = next(r for r in rows if r["id"] == args[0])
         if verb == "update":
-            row["instructions"] = args[2]
+            if kind == "skill":
+                row["content"] = data
+            else:
+                row["instructions"] = args[2]
         return copy.deepcopy(row)
 
     def test_apply_preserves_routing_and_existing_text_and_is_idempotent(self):
@@ -45,6 +49,7 @@ class PolicyTest(unittest.TestCase):
             policy.apply(self.command, records, Path(directory))
             self.assertEqual(len(list(Path(directory).glob("backups/*/changes.json"))), 1)
         self.assertEqual(policy.plan(self.command), [])
+        self.assertTrue(self.rows["skill"][0]["content"].startswith(before["skill"][0]["content"]))
         for old, new in zip(before["workflow"][0]["steps"], self.rows["workflow"][0]["steps"]):
             self.assertEqual({k: v for k, v in old.items() if k != "instructions"},
                              {k: v for k, v in new.items() if k != "instructions"})
