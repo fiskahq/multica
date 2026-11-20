@@ -800,6 +800,17 @@ an existing runtime requires the rebuilt image and daemon restart; new installs 
 default. Removing that environment variable disables Acceptance cleanup. The helper receives
 only issue/workspace IDs and proven root paths, and runs under the daemon's cleanup guard.
 
+For an existing Software Development team, `./setup-qa-policy.sh` installs complete QA reporting
+and a fix-planning consultation with `development-planner`; use `--dry-run` to preview the update.
+`./setup-delivery.sh` also installs this policy. QA runs every required, runnable suite without
+stopping at the first failure, records blocked/skipped checks separately, and publishes a complete
+report tied to the tested commit. Before returning defects to Development, QA requests a plan on
+the same issue and waits for the planner's response. The builder receives both the report and plan.
+The installer updates the QA, planner, builder and leader instructions, squad guidance, and the
+Software Factory QA/Development steps when present. It backs up changed fields and verifies
+readback without changing workflow routing or starting tasks. These are agent instructions,
+not server-enforced test gates; they take effect on new runs. Existing runs are not interrupted.
+
 The separate scheduled maintenance below removes only dangling images older than 48 hours and old unused build cache. The cache
 size targets are 20 GB on the host and 10 GB in the separate QA Docker daemon. Recent and in-use
 records are retained, so these are best-effort targets rather than hard quotas. Tagged images,

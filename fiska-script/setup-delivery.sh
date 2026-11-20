@@ -16,3 +16,4 @@ umask 077
 python3 "$MULTICA_SETUP_DIR/configure-delivery-pr.py"
 python3 "$MULTICA_SETUP_DIR/configure-delivery-branches.py"
 python3 "$MULTICA_SETUP_DIR/configure-jira-policy.py"
+python3 "$MULTICA_SETUP_DIR/configure-qa-policy.py"
