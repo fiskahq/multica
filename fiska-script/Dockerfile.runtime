@@ -21,6 +21,7 @@ RUN curl --fail --show-error --silent --location --retry 3 \
     && rm /tmp/install-kiro.sh
 
 USER node
+COPY --chown=node:node relay-stdio.py /opt/agent-tools/relay-stdio.py
 ARG CLAUDE_VERSION=latest
 ARG CODEX_VERSION=latest
 ARG OPENCODE_VERSION=latest
@@ -29,6 +30,11 @@ RUN npm install --global --prefix /opt/agent-tools \
       "@openai/codex@${CODEX_VERSION}" \
       "@opencode/cli@${OPENCODE_VERSION}" \
     && npm cache clean --force
+
+COPY --chown=node:node --chmod=755 acceptance/docker-wrapper.py /opt/agent-tools/bin/docker
+COPY --chown=node:node --chmod=755 acceptance/cleanup.py /opt/agent-tools/acceptance-cleanup
+COPY --chown=node:node --chmod=755 factory-mysql.py /opt/agent-tools/bin/factory-mysql
+ENV MULTICA_ACCEPTANCE_CLEANUP_COMMAND=/opt/agent-tools/acceptance-cleanup
 
 ENV NPM_CONFIG_PREFIX=/home/node/.local
 ENV PATH=/opt/agent-tools/bin:/usr/local/bin:/home/node/.local/bin:$PATH

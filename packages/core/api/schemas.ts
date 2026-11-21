@@ -1677,7 +1677,18 @@ export const CommentSubIssueTaskResponseSchema = z.object({
   task_id: z.string().min(1),
 }).loose();
 
+export const DecisionPolicySchema = z.object({
+  mode: z.enum(["human", "auto", "agent"]),
+  root_issue_id: z.string().uuid(),
+  agent_id: z.string().uuid().optional(),
+  agent_name: z.string().optional(),
+  configured_by: z.string().uuid().optional(),
+  comment_id: z.string().uuid().optional(),
+  available: z.boolean(),
+}).refine((policy) => policy.mode !== "agent" || !!policy.agent_id);
+
 export const IssueSchema = z.object({
+  decision_policy: DecisionPolicySchema.optional().catch(undefined),
   id: z.string(),
   workspace_id: z.string(),
   number: z.number(),

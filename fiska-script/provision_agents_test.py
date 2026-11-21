@@ -44,6 +44,8 @@ class ProvisionTests(unittest.TestCase):
             if args[:2] == ("agent", "list"):
                 return agents
             if args[:2] == ("agent", "create"):
+                instructions = args[args.index("--instructions") + 1]
+                self.assertIn("<!-- fiska:jira-ticket-policy:start -->", instructions)
                 agent = {"id": str(len(agents)), "name": args[args.index("--name") + 1]}
                 agents.append(agent)
                 return agent

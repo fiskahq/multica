@@ -126,11 +126,23 @@ login into the running runtime:
 ./setup-claude.sh
 ```
 
-This checks the host login, copies its credentials through stdin with private file permissions,
+This checks the host login, copies only its Claude subscription credentials through stdin with private file permissions,
 and checks the runtime login status. It does not restart the runtime or retry failed tasks.
 All Claude agents in this shared runtime use the imported account. This is a one-time copy;
 subsequent host login changes are not synchronized. To give Docker its own login, run
-`./sandbox.sh shell` followed by `claude auth login` instead.
+`./sandbox.sh shell` followed by `claude auth login` instead. Runtime MCP credentials are preserved.
+
+For unattended jobs, generate a long-lived subscription token in your terminal with
+`claude setup-token`, then run `./setup-claude.sh --token` and paste it into the hidden prompt.
+Copy the raw token without Markdown escaping, quotes or backslashes. The installer rejects
+formatted tokens. Do not paste tokens into chat or put them in command arguments. The script stores the token in
+`env.CLAUDE_CODE_OAUTH_TOKEN` in the runtime's persistent `~/.claude/settings.json`, with mode
+0600. New Claude processes load it without restarting the daemon. Existing processes keep their
+current authentication. Explicit agent API keys and other higher-priority authentication still
+apply. Once this token is installed, replace it with `--token`; the host-login importer refuses
+to silently override it. Claude's local auth status does not prove a model request will succeed.
+See [Claude authentication](https://code.claude.com/docs/en/authentication#generate-a-long-lived-token)
+for expiry and capability limits.
 
 The runtime connects to `http://backend:8080` on the Compose network. It appears as
 `multica-docker-sandbox` under Team > Runtimes. Create an agent that uses this runtime and its
@@ -657,12 +669,97 @@ itself and does not interrupt current runs.
 The release agent must create or update the task PR and verify its open state, URL, target branch
 and reviewed head SHA before Acceptance. Final branches always use
 `feature/<JIRA-KEY>-<short-description>`, for example `feature/MS-123-transaction-reporting`.
-When there is no linked Jira ticket, use the originating Multica identifier, for example
+Only when the user explicitly opted out of Jira, use the originating Multica identifier, for example
 `feature/FISK-42-transaction-reporting`. The description is lowercase kebab-case and the issue key
 is uppercase. Fixes and maintenance also use `feature/`. The reviewed SHA remains unchanged.
 Existing PRs and active/dirty worktrees retain the shared skill's preservation rules; setup does
 not rename current Git branches. Merge and deployment require separate task authorization.
 These are verified agent instructions, not a server-enforced status gate.
+
+## Jira prerequisite for every ticket
+
+Every Multica ticket needs a matching Jira ticket unless the user explicitly opts out. Intake
+searches for an existing scope match or creates the missing ticket, records the primary Jira key
+and URL in Multica, and adds a Multica backlink in Jira. Capture can happen first, including manual
+and quick-create tickets; implementation must wait for the mapping or a cited user exemption.
+Missing access or an ambiguous Jira destination blocks implementation with an owner and resume step.
+`/decisions auto` does not opt out of Jira. Child tickets need a verified mapping for their scope.
+
+Agent setup, Architect, advisor and delivery setup apply this policy automatically. For an existing
+installation, or after adding agents/workflows manually, run:
+
+```bash
+python3 configure-jira-policy.py --dry-run
+python3 configure-jira-policy.py
+# From the fork's fiska-script folder, target a separate private deployment:
+python3 configure-jira-policy.py --deployment-dir /absolute/path/to/existing/setup
+```
+
+The installer updates agent/squad instructions, ticket-creation and delivery-handoff skills when
+present, and assigned nonterminal workflow checkpoints. Unassigned steps cannot store instructions
+in Multica; the coding agent's preflight still applies when work is assigned manually.
+It attaches the existing scoped
+`factory-jira-triage` write endpoint to Architect, development-release and Guy when available,
+preserving other attachments.
+Other agents can delegate Jira intake to Architect. A fresh install uses its configured Jira
+endpoint; enable writes in the relay wizard to allow creation. Missing write access blocks intake.
+The installer preserves routing, credentials and runtime
+settings, backs up changed text, and verifies readback. The background learner remains a tool-free
+draft reviewer; its captured tickets must also satisfy intake before any development. No historical
+Jira tickets are bulk-created. Existing active runs receive the policy on their next run; setup does
+not interrupt them. New roles/workflows added outside these installers need the command rerun.
+
+This uses native instructions, not a server-enforced creation or status-transition gate. Agents
+must follow the preflight; the API does not prevent a manual move into Development. Duplicate
+prevention uses existing-ticket lookup, a designated intake owner and recovery after uncertain
+creates; it is not a transactional cross-system uniqueness guarantee. Do not edit the same
+instructions while installing: read-before-write detects intervening edits but is not an atomic
+compare-and-swap. Review backups if an installation stops partway through.
+
+### Jira and other relay tools on Kiro v3
+
+Kiro v3 can declare HTTP and SSE MCP unsupported. Registering an HTTP endpoint then leaves its
+tools unavailable even though the agent's attachment is enabled. Docker setup uses
+`relay-stdio.py` to forward stdio MCP requests to the same scoped HTTP relay endpoints. The runtime
+image includes the adapter; the wizard and relay sync register stdio by default. Tool names,
+endpoint tokens, allowlists and Jira permissions remain the same. Headers travel in MCP environment
+configuration, never command arguments. The adapter rejects redirects and does not retry writes
+after a timeout or connection failure; agents must reconcile the result before retrying.
+
+For an existing running installation, install the adapter and convert its locally configured
+relay registrations without restarting the runtime:
+
+```bash
+python3 setup-relay-stdio.py --deployment-dir /absolute/path/to/existing/setup
+python3 configure-jira-policy.py --deployment-dir /absolute/path/to/existing/setup
+```
+
+The first command preserves registration IDs and agent attachments. The second ensures the intake,
+release and Guy roles have the scoped Jira writer. Fresh runs receive the new transport. Active runs
+keep their original tools until they finish. Supported ticket writes include creation, field edits,
+comments, assignment, transitions and issue links; existing restrictions on administrative and
+destructive operations remain in the relay. A configured tool does not override the task's scope.
+
+### Scoped Confluence writes and Jira release management
+
+After configuring Jira and running `setup-confluence-writes.sh`, run:
+
+```bash
+bash setup-collaboration-tools.sh --deployment-dir /absolute/path/to/existing/setup
+```
+
+This attaches the ticket writer, Confluence writer and a separate `factory-jira-release` tool to
+**Guy, Architect and development-release** when those agents exist. Other agents keep their current
+attachments and can delegate these operations. The background learner remains excluded. Setup
+backs up the relay configuration, briefly reloads only the main relay when required, installs the
+stdio adapter, and updates native instructions. Run it between active tasks; it does not restart
+the agent runtime. Repeating setup preserves registration IDs and does not duplicate attachments.
+
+The release tool can find, create, edit, release, unrelease, archive, unarchive and reorder project
+versions. It denies release deletion, merging and unrelated Jira writes. Ticket writers do not gain
+release management through their existing endpoint. Confluence edits use the current page version
+and must preserve unrelated content. All changes remain subject to the assigned task and the
+connected account's permissions. Existing sessions need a fresh run to receive newly attached tools.
 
 ## Docker disk maintenance
 
@@ -675,7 +772,81 @@ Inspect and clean regenerable Docker data without stopping agents:
 ./setup-docker-cleanup.sh --remove # Disable that schedule.
 ```
 
-Cleanup removes only dangling images older than 48 hours and old unused build cache. The cache
+Acceptance cleanup is automatic in the supplied runtime image. Once a ticket enters the
+`acceptance` status, a daemon worker checks it within about one minute and waits until its agent
+work finishes. A per-issue guard prevents a new task from starting during cleanup, including a
+new task that uses a different workspace directory. Returning the ticket to development can
+require reinstalling dependencies and rebuilding its test stack.
+
+Ordinary task Docker commands pass through an ownership wrapper: containers and direct builds
+get issue/workspace labels, and Compose projects get a stable ticket-specific name. Cleanup
+removes those containers, their anonymous volumes, owned named volumes/networks and unused
+built images from the `multica-qa` daemon. Shared pulled base images and build cache remain under
+periodic maintenance. Use `docker` from PATH; calling `/usr/local/bin/docker` or a remote Docker
+API directly bypasses ownership tagging. Explicit Compose project names are scoped to the
+current ticket, so obtain the effective name from `docker compose config` when needed.
+
+The same cleanup removes untracked dependency/cache directories (`node_modules`, `.next`,
+`.turbo`, `.venv`, `__pycache__`, `.pytest_cache`) from daemon-owned ticket workspaces.
+Source files, Git history, tracked files, nested repositories, symlink targets, output and logs
+are retained. Task metadata and a small cleanup receipt provide retry/idempotency state; no AI
+call or separate service is needed. Failed cleanup is retried, and a new completed task makes
+its resources eligible again. Old Compose resources are eligible only when their recorded
+working directory proves ownership; unlabelled resources with no ownership evidence are retained.
+Scratch directories outside the managed ticket workspace are not deleted automatically.
+
+The runtime image sets `MULTICA_ACCEPTANCE_CLEANUP_COMMAND` to its installed helper. Updating
+an existing runtime requires the rebuilt image and daemon restart; new installs get it by
+default. Removing that environment variable disables Acceptance cleanup. The helper receives
+only issue/workspace IDs and proven root paths, and runs under the daemon's cleanup guard.
+
+For an existing Software Development team, `./setup-qa-policy.sh` installs complete QA reporting
+and a fix-planning consultation with `development-planner`; use `--dry-run` to preview the update.
+`./setup-delivery.sh` also installs this policy. QA runs every required, runnable suite without
+stopping at the first failure, records blocked/skipped checks separately, and publishes a complete
+report tied to the tested commit. Before returning defects to Development, QA requests a plan on
+the same issue and waits for the planner's response. The builder receives both the report and plan.
+The installer updates the QA, planner, builder and leader instructions, squad and testing-skill
+guidance, and the Software Factory QA/Development steps when present. It backs up changed fields and verifies
+readback without changing workflow routing or starting tasks. These are agent instructions,
+not server-enforced test gates; they take effect on new runs. Existing runs are not interrupted.
+
+`./setup-factory-policy.sh` applies evidence-led intake and complete candidate review rounds to
+the existing team; `--dry-run` checks the planned changes. `setup-delivery.sh` includes it.
+Architect/planner/advisor record unobserved assumptions, observation slices, one behavior per PR,
+invariants, a finite fact list, first-candidate permutation tests and a written blocking bar.
+The target remains 3-6 files; **more than 15 hand-maintained changed files** requires David's
+explicit approval on the ticket. Tests, docs and configuration count; generated files are listed
+separately. Explicit existing scope exceptions remain valid. A no-new-tickets request also applies
+to automatic slice and follow-up creation.
+
+Code Review and Architecture Review have no native back route. Both complete their review of the
+same frozen SHA and pass their findings forward, including failures. Adversarial Review combines
+all three receipts and returns one blocker list, or advances to QA when none remain. Review stages
+remain sequential; this is not parallel scheduling or a server-validated verdict system. Direct
+issue status writes are still possible. The installer preserves handler identities, forward routes,
+QA fix planning and human Acceptance, verifies readback, and backs up changes under `backups/`.
+It does not restart current runs, whose existing prompts may still contain the old rules.
+
+The same installer installs `factory-mysql` in the runtime's persistent home, and runtime images
+include it. It runs the complete payment API and Nuvei adapter test projects on a private MySQL 8
+container with tmpfs storage, one CPU and a 2 GB memory limit. It records each exit status, logs,
+TRX files, candidate SHA and dirty state; it continues to the second suite after failure or timeout.
+It removes only that invocation's container on exit. Run from the runtime, where the `multica-qa`
+daemon's published loopback ports are reachable:
+
+```bash
+factory-mysql /path/to/candidate --docker-context multica-qa --output /path/to/new-evidence-dir
+```
+
+The evidence directory must not exist. The checkout needs its normal .NET prerequisites; the helper
+does not install SDKs, change source or supply missing suites. Inspect TRX skip counts as well as exit
+codes. Other repository-required tests still run separately. The helper does not implement the
+schema reuse tracked in FISK-190, and a card-not-present emulator does not establish terminal-flow
+coverage. The remaining baseline portability gap is recorded in
+[the factory audit](factory-policy/audit.md).
+
+The separate scheduled maintenance below removes only dangling images older than 48 hours and old unused build cache. The cache
 size targets are 20 GB on the host and 10 GB in the separate QA Docker daemon. Recent and in-use
 records are retained, so these are best-effort targets rather than hard quotas. Tagged images,
 all containers, all volumes, repository workspaces, credentials and backups are preserved. Old
@@ -701,6 +872,60 @@ See [Docker pruning](https://docs.docker.com/engine/manage-resources/pruning/) a
 Run `bash cleanup-docker.test.sh` to verify cleanup scope and retention guards with a mock Docker CLI.
 
 ## Manage
+
+### Finish linked Jira tickets
+
+Run `./setup-jira-done.sh` once after configuring the Jira relay. `setup-delivery.sh` also installs
+it when a relay is configured. This starts a small independent `jira-done` container; it does not
+restart the API or agents. On first start it records the existing issue statuses without closing
+older Done tickets. Later moves to Done are checked every 30 seconds and survive worker restarts.
+
+The worker assigns the primary linked Jira ticket to **David Bernard**, then uses the available
+successful completion transition and Done/Fixed resolution. It verifies both assignment and
+completion by reading Jira back. It does not choose cancellation/abandonment transitions, invent
+required field values, merge PRs, deploy, or reopen Jira when Multica is reopened. Set another
+assignee with `./setup-jira-done.sh install --assignee 'Exact Jira display name'`.
+
+When several Multica tickets share a Jira key, **all must be Done** before Jira closes. Cancelled
+or blocked linked work does not count as completed. A user can explicitly waive this for a named
+Multica ticket. Record the authorization with:
+
+```bash
+./setup-jira-done.sh allow-shared-close FISK-123 --reason 'David authorized early Jira closure in ...'
+./setup-jira-done.sh revoke-shared-close FISK-123
+./setup-jira-done.sh status
+./setup-jira-done.sh retry
+```
+
+Exceptions live in the private operator configuration, not agent-editable issue metadata. They
+persist for that issue until revoked. Do not grant them on an agent's own initiative. Setup never
+creates Multica or Jira tickets and does not bulk-assign historical issues.
+
+Links must be explicit: `jira_key` issue metadata, `Jira: MS-123`, a primary `Jira:` Markdown link,
+or the first link/key under a Jira heading. Links must target the configured Jira site. Related
+ticket references are not primary mappings, conflicting mappings block, and `Jira: not required`
+is respected. The existing intake owner remains responsible for verified mapping and user exemptions.
+
+The issue's `jira_done_sync` metadata records success, missing links, linked work still open, or
+retry failures. `status` lists these receipts and errors. Retryable failures back off to one hour;
+blocked prerequisites are checked every five minutes. Uncertain writes are always read back before
+another write. The persistent SQLite state and shared-volume lock prevent two worker instances
+from processing the same event concurrently. Do not run copies with independent data directories.
+
+This is eventual synchronization, not a cross-service atomic transaction. The worker rereads the
+issue and known linked peers immediately before writes; Jira and Multica can still change during
+an API call. Brief moves out of Done and back between polls may not be observed. Full workspace
+scan access is required to enforce the shared-ticket rule; keep the owner credential configured.
+Missing access or workflow fields remain visible rather than being treated as completion. Rerun
+setup after rotating Multica or relay credentials. Preserve `jira-done-private/data` during updates.
+
+Validation: `python3 jira-done/service_test.py` runs local logic and real HTTP fixture tests, including
+committed writes with lost replies. Fixtures model the observed Jira Complete Ticket transition
+and the documented [Jira issue APIs](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/).
+They prove client/state behavior, not Jira permissions or arbitrary project workflows. No real Jira
+ticket is changed by tests.
+
+### Stack commands
 
 ```bash
 ./sandbox.sh status
@@ -746,3 +971,260 @@ secrets to this directory. Review local Compose overrides for absolute paths, th
 resolved configuration before restarting. Reinstall the cleanup and QA watchdog schedules from
 the new location and remove the old schedules so maintenance uses only one installation path.
 Keep the same `MULTICA_PROJECT_NAME` to retain the existing named volumes.
+
+## Background learning
+
+`./setup-learner.sh` installs one private Kiro **background-learner** and a small Docker service.
+It uses native Multica agent execution and a private **Learning Review** project. It does not run
+Hermes. New installs use **Opus 5.5 with high reasoning effort**. Use `--model MODEL` and
+`--thinking-level low|medium|high` to change the selection; later installs preserve saved choices.
+To upgrade an existing Haiku learner, run
+`./setup-learner.sh --model claude-opus-5.5 --thinking-level high`.
+Kiro uses the existing credential pool.
+
+The installer requires a backend built from the synced fork containing upstream private-project
+Autopilot protection (`c3a9d8fd1`). It verifies the stamped version against Git ancestry and refuses
+unverifiable builds. `--prepare-only` creates the agent without starting runs. Updating only the CLI
+is insufficient. The installer never restarts the backend or runtime.
+
+```bash
+./setup-learner.sh
+./setup-learner.sh status
+./setup-learner.sh candidates
+./setup-learner.sh show SOURCE_TASK_UUID
+./setup-learner.sh stop
+./setup-learner.sh start
+```
+
+For an existing deployment whose private state remains elsewhere, add
+`--deployment-dir /absolute/path/to/existing/setup` to each command. The running service mounts its
+code from this checkout, so keep the checkout at that path. Fresh installs use this folder directly.
+
+Completed and failed **issue runs**, across accessible agents, are discovered every 60 seconds from
+paginated native task history. This first version uses asynchronous reconciliation rather than a
+new completion webhook in the backend. Runs completed before initial installation are excluded;
+runs already active at installation are included when they finish. Private chat sessions and the
+learner's own runs are excluded. Deleted history cannot be recovered.
+
+SQLite stores at most 500 pending/active items on persistent storage, with one active learner job.
+Atomic transactions enforce the bound, task IDs deduplicate discoveries, and a process lock prevents
+multiple workers dispatching the same active job. When full, new items stay in Multica history and
+are discovered on later scans. HTTP retries reuse the persisted body and native webhook idempotency
+key. A confirmed failed/skipped run or invalid output retries after 60 then 120 seconds, up to three
+attempts; exhausted items remain visible as `dead`. An uncertain network response keeps the same
+active item and key instead of starting another run. The learner consumes one of the runtime's
+existing task slots. The sidecar is limited to 0.5 CPU and 512 MiB RAM.
+
+The evidence packet contains a bounded, redacted transcript excerpt and recent issue comments.
+Long transcripts may omit earlier context. Candidates must cite the source task and supplied
+message sequence numbers, distinguish claims from verified results, and state applicability and
+validation limits. The queue saves the source project and agent independently of model output.
+It clears the prompt copy after processing; native Autopilot history still retains its payload.
+
+Validated drafts automatically become unassigned **Todo** tickets in the private **Learning Review**
+project. Open that project's issue list to review the lesson, rationale, evidence, applicability,
+validation limits and review checklist. Existing queued drafts are backfilled without another model
+call. Runs that return `no_lesson` or fail validation do not create tickets.
+
+Ticket receipts prevent repeats across restarts and concurrent syncs. If a create response is lost,
+the service searches for the source-task marker, including closed tickets. An uncertain creation
+that cannot be found remains visible as `creation_outcome_unknown` in `status`; it is never blindly
+submitted again. Inspect the server and receipt before recovery. Keep the marker in the ticket
+description until the receipt has its issue ID. Recorded tickets are not rewritten or recreated
+after human edits, completion or deletion. The project's workflow must have Todo and no automatic
+handlers, so reviewing a lesson does not trigger development work.
+
+You can also inspect drafts using `candidates` or the Autopilot run history.
+A reviewer must check the cited evidence, narrow the scope, remove sensitive details, and check for
+an existing equivalent skill. The worker posts a copyable approval command on each review ticket:
+
+```text
+/learning approve CONTENT_HASH
+```
+
+Only a member comment from the installation owner's account (the API credential's `/api/me` user)
+is accepted. Agent and task-backed comments cannot approve. Copy the full command from the latest
+Learning automation comment; the hash binds the ticket's exact text and generated skill content.
+Edit **Proposed lesson**, **Applicability**, or **Validation limits** before approving. Edits produce
+a new command on the next scan and invalidate earlier commands. Marking a ticket Done is not approval.
+The worker checks approvals every 60 seconds. `/learning hold` supersedes a pending approval, but
+does not undo work already applied.
+
+Approval creates a separate native `learned-SOURCE_TASK_UUID` skill and attaches it to the source
+agent. To select different agents, append ` agents=AGENT_UUID,AGENT_UUID` to the approval command.
+The skill is **workspace-visible**. Project scope is preserved as an instruction in the skill, not
+as a runtime access restriction. Only the reviewed procedure, applicability and validation limits
+are published; the raw transcript and draft rationale are not copied into the skill.
+
+The publisher records the approver, approval comment, content hash, native skill ID/version and
+verified agent attachments, then posts a receipt on the review ticket. Existing skills are not
+replaced or automatically merged. Native unique skill names and additive attachments support retry
+after a lost response. Partial application resumes from its receipt; operator edits, disabled skills
+or recorded attachments that were removed cause a block instead of being overwritten. Check
+`./setup-learner.sh status` for publication state and errors.
+
+Applied skills are available on subsequent runs; existing runs are not restarted. To undo
+application, remove the skill from the listed agents in Skills settings. Completed receipts never
+reapply a removed skill. One review ticket has one immutable publication; later ticket edits do not
+republish. Further revisions or merges into shared skills use Multica's native Skills editor and
+version history. Manual publication and attachment remain available.
+
+After pulling learner service changes, run `./setup-learner.sh stop` then `./setup-learner.sh start`
+to reload the worker code. This only restarts the queue service; native agent runs continue and are
+reconciled on startup.
+
+`learner-private/` contains the owner API credential, SQLite database, and sensitive drafts. It is
+ignored by Git, created with owner-only permissions, and mounted only into the learner container.
+The service has no Docker socket or provider credentials. Redaction is best effort, so keep the
+review project private and restrict its membership. The service checks that project visibility and
+the verified backend version still match before each new dispatch. After a backend upgrade, rerun
+`setup-learner.sh` to verify compatibility and refresh its credential and configuration.
+
+The status command reports queue counts and the last scan/worker heartbeat. A dead item needs
+operator inspection; there is no automatic deletion of drafts or completed receipt IDs. Back up
+`learner-private/` while the service is stopped, or use SQLite's online backup API. Do not delete
+receipts merely to reduce queue counts: they prevent repeated learning from the same source run.
+
+Verification, without paid model calls:
+
+```bash
+python3 -m unittest discover -s learner -p '*_test.py' -v
+```
+
+## Per-flow decision policy
+
+Post one of these as a separate top-level comment on the root ticket:
+
+```text
+/decisions human
+/decisions auto
+/decisions @Architect
+```
+
+`human` is the default. `auto` authorizes the working agents to consult appropriate specialists
+and resolve critical decisions. `@agent_name` delegates those decisions to one named agent.
+The web editor's native agent mention also works. The ticket's human creator/requester, its
+human project lead, and workspace owners/admins may change the policy. Agent task credentials
+cannot change it. Invalid, inaccessible, archived, unconfigured, or ambiguous agent selections
+leave the policy unchanged.
+
+Child tickets inherit the current root policy, including children without their own project
+workflow. Post changes on the root, not a child. Reparenting changes which flow a ticket belongs
+to. Commands are saved with the policy in one database transaction, remain in the comment audit
+history, and cannot be edited or deleted. Post `/decisions human` to revoke automatic decisions.
+Quoted commands, issue descriptions, and metadata do not set policy. Concurrent commands are
+serialized by the root issue's row lock; the last committed command wins.
+
+The backend injects recurring checkpoints into named workflow briefs: requirements, design and
+planning, each handoff, new evidence, and delivery/acceptance. Agents must record questions,
+options, recommendations, evidence, affected requirements/commit, decision owner, and resume
+steps. They route questions through native comment threads and release their execution slot
+while waiting. Routine work and independent tasks can continue. A material change reopens the
+relevant decision. `auto` does not bypass existing merge, deployment, production, spending,
+external-communication, review, or acceptance requirements.
+
+Agents read the current policy at each checkpoint with:
+
+```bash
+multica issue get FISK-123 --output json
+```
+
+The detail response's `decision_policy` contains `mode`, `root_issue_id`, `available`, and, after
+an explicit command, `configured_by` and `comment_id`. Agent mode also contains `agent_id` and
+`agent_name`. A selected agent becoming unavailable leaves mode unchanged with `available: false`;
+the instructions require waiting for a human rather than silently enabling automatic decisions.
+Older backends omit this field. It is also omitted when the root is in a private project the
+reader cannot access; the child remains readable. Task briefs fail closed for that case. Missing
+policy or policy-read failures must not be treated as automatic approval.
+
+Policy changes apply to pending and future decisions when an agent next checks the policy.
+They do not start a run, redirect an already running turn, resolve a question, or advance a blocked
+ticket. Resume work through the existing assignment/comment workflow. The server enforces policy
+ownership and persistence. Identifying critical decisions, routing questions, and observing the
+checkpoints are agent instructions, not a database-enforced status-transition lock.
+
+This feature ships in the fork's backend, including migration 669, and is built by the standard
+setup/update scripts. It needs no separate sidecar, CLI update, or per-agent configuration.
+
+## Internal Admin access and transcript inbox
+
+Install the Jira/Confluence relays first, then configure the existing Software Development Management
+squad. Grant its actual agent members Jira ticket and Confluence page read/write access with:
+
+```bash
+python3 configure-admin-access.py --deployment-dir /absolute/path/to/setup
+bash setup-transcripts.sh --deployment-dir /absolute/path/to/setup
+bash setup-transcripts.sh status --deployment-dir /absolute/path/to/setup
+```
+
+The transcript installer also applies that access policy. It preserves existing agent settings and
+attachments, and does not give new Jira release rights to admin specialists. Guy retains his existing
+release rights. Source documents cannot authorize writes, and personnel/financial privacy rules remain.
+
+Drop Word `.docx` files or UTF-8 `.txt`, `.md`, `.vtt` and `.srt` files into
+**`<setup>/transcript-inbox/`**. Text files are limited to 128 KiB. Word files can be up to 10 MiB,
+with at most 8 MiB of document XML and 128 KiB of extracted text. Word paragraphs and tables are read
+in document order; formatting runs, tabs and line breaks are preserved as text. Deleted tracked text
+and field instructions are excluded. Images/OCR, headers, footers, comments and footnotes are not
+ingested. Legacy `.doc`, encrypted documents, audio, PDFs and recursive directories are unsupported.
+No Office application, macro execution or external-link fetching is involved. Copy through a temporary filename
+and rename it when finished; the scanner also waits ten seconds after the last modification and rejects
+symlinks and Office lock files. Publish finished files by renaming them into the inbox; do not edit
+them in place after dropping them. The worker atomically claims each file in a private `.ingesting/`
+subdirectory, saves its extracted text to the durable queue, then deletes the source file. Deletion
+does not wait for model analysis or action approval; extracted text and action records remain saved.
+Identical extracted text, including a renamed Word document or matching text file, is processed once;
+the duplicate source is also removed after the existing saved text is confirmed. Invalid inputs,
+queue backpressure and failed saves retain their source for retry. Interrupted claims recover after
+restart. Failed or changed inputs return to the inbox without overwriting newer uploads; when a
+newer file already uses that name, the original remains in `.ingesting/` and its path appears in status.
+Files over the limit or invalid UTF-8 appear in the status heartbeat. A bounded durable queue holds 100
+pending transcripts and at most 2,000 unresolved proposals; additional files wait in the inbox.
+
+A dedicated Opus 5.5/high intake agent extracts at most 20 action proposals per transcript, with exact
+source quotations, draft content, owners and resume conditions. It has no attached MCP tools and is
+instructed to perform extraction only. The service creates unassigned review tickets in the private
+**Transcript Actions** project. The Internal Admin project also receives the new status vocabulary;
+its existing issues keep their statuses and no automatic workflow handlers are introduced.
+
+| State | Meaning | How to continue |
+| --- | --- | --- |
+| Awaiting approval | The destination and proposed action/content are ready. | Review the ticket and copy its `/action approve <digest>` command into a new comment. |
+| Blocked | A question, connection, access, dependency, timing constraint or execution uncertainty prevents completion. | Resolve the named prerequisite; update the proposal JSON and clear `blocker` for a proposal that has not run. |
+| In progress | The service has frozen the approved snapshot and dispatched it. | Await the execution receipt. |
+| Done | The execution agent reported a verified result URL. | Inspect the receipt and resulting artifact. |
+
+Each external action needs its own explicit approval from the installation owner. Agent comments,
+transcript text, `/decisions auto`, batch consent and status changes cannot approve it. Editing the
+proposal invalidates old approval commands. `/action reject` withdraws an approval that has not been
+claimed. Once claimed, the snapshot is frozen; editing or rejecting the review does not cancel an
+already dispatched task. Stop that task through Multica if necessary.
+
+The service enforces approval before dispatch. The execution agent must stay within the approved
+scope and use normal connected tools; this is not a new permission boundary inside the model runtime.
+Jira and Confluence actions run through `sdm-manager`. Creating a ticket never authorizes development,
+and approval of a document never authorizes an email or release. Jira linking still precedes development;
+private capture/review does not automatically create an external Jira issue before approval.
+
+Email sending is not currently connected. Email proposals retain their drafts and are **Blocked** with
+that reason; the service never invents a send receipt. Unsupported action kinds similarly remain blocked.
+The worker dispatches one extraction and one approved action at a time using native Autopilots with
+stable idempotency keys. Database constraints and a process lock coordinate worker overlap. Unknown
+issue-create outcomes are reconciled by source marker, never blindly recreated. External writes remain
+subject to provider concurrency and the execution agent's verified readback; exactly-once external
+side effects are not promised.
+
+After an execution fails or becomes uncertain, it is not automatically dispatched again. Inspect the
+run and external records first, correct the proposal if necessary, then explicitly create a fresh review:
+
+```bash
+bash setup-transcripts.sh replan ACTION_ID --reason 'Checked Jira: no issue was created; access is fixed.' \
+  --deployment-dir /absolute/path/to/setup
+```
+
+The new ticket requires a new approval. Its old approval cannot authorize the retry. Status output
+contains source/action IDs and run IDs. Provider failure or invalid extraction output is reported there;
+no external action follows an invalid extraction. No mail, Jira issue or Confluence page is created by
+installation. The inbox, transcript state and queue are ignored by Git and private to the installing
+user. The sidecar has no Docker socket, uses 0.5 CPU/512 MiB, and persists across Docker restarts.
+Use `setup-transcripts.sh stop` or `start` to control just this service. Existing runtimes stay running.

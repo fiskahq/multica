@@ -16,3 +16,5 @@ fi
 start_runtime
 python3 "$MULTICA_SETUP_DIR/provision-agents.py" "$1"
 python3 "$MULTICA_SETUP_DIR/configure-kiro-pool.py" "$1"
+unlock_operation
+python3 "$MULTICA_SETUP_DIR/configure-jira-policy.py"

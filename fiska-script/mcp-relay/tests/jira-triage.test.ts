@@ -49,6 +49,9 @@ test("triage permits individual ticket work and rejects destructive or unrelated
     ["POST", "/rest/api/3/issue/MS-123/transitions"],
     ["POST", "/rest/api/3/issueLink"],
     ["GET", "/rest/api/3/issue/MS-123"],
+    ["GET", "/rest/api/3/project/MS/version"],
+    ["GET", "/rest/api/3/project/MS/versions"],
+    ["GET", "/rest/api/3/version/12345"],
   ];
   for (const [method, path] of allowed)
     assert.ok(
@@ -64,6 +67,9 @@ test("triage permits individual ticket work and rejects destructive or unrelated
     ["PUT", "/rest/api/3/issue/archive"],
     ["POST", "/rest/api/3/issue/MS-123/notify"],
     ["POST", "/rest/api/3/project"],
+    ["POST", "/rest/api/3/version"],
+    ["PUT", "/rest/api/3/version/12345"],
+    ["DELETE", "/rest/api/3/version/12345"],
     ["PATCH", "/rest/api/3/issue/MS-123"],
     ["PUT", "/rest/api/3/issue/MS-123/"],
     ["PUT", "/rest/api/3/issue/MS-123/../../project"],

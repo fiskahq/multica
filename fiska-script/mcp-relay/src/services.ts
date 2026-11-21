@@ -97,7 +97,7 @@ export function registerServices(registry: ToolRegistry, config: Config) {
       : settings.site;
     registry.local(
       "jira__request",
-      "Jira REST v3. Examples: GET /rest/api/3/search/jql with query.jql; GET /rest/api/3/issue/MS-123; GET /rest/api/3/field; POST /rest/api/3/issue/MS-123/transitions or /comment; PUT /rest/api/3/issue/MS-123. Preserve nextPageToken/startAt pagination fields. Writes require allowWrites.",
+      "Jira REST v3. Releases are project versions: GET /rest/api/3/project/KEY/version with query {query: NAME_FRAGMENT, status: unreleased|released|archived, startAt: 0, maxResults: 50}; omit query/status to list all. Results are in values; advance startAt by values.length until isLast is true, not just the first page. GET /rest/api/3/version/ID reads release details. GET /rest/api/3/search/jql with query.jql 'project = KEY AND fixVersion = ID' finds release tickets. Other examples: GET /rest/api/3/issue/MS-123; GET /rest/api/3/field; POST /rest/api/3/issue/MS-123/transitions or /comment; PUT /rest/api/3/issue/MS-123. Paths and query parameters are separate. Preserve nextPageToken for issue search. Writes require allowWrites.",
       input,
       !settings.allowWrites,
       async ({ method, path, query, body }) => {

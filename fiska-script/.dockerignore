@@ -1,2 +1,9 @@
 *
 !Dockerfile.runtime
+!Dockerfile.qa-docker
+!relay-stdio.py
+!factory-mysql.py
+!acceptance/
+acceptance/**
+!acceptance/cleanup.py
+!acceptance/docker-wrapper.py

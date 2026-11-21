@@ -188,6 +188,7 @@ func taskMulticaEnvironment(task Task, provider, agentName, token, configRoot, w
 		"MULTICA_AGENT_NAME":   agentName,
 		"MULTICA_AGENT_ID":     task.AgentID,
 		"MULTICA_TASK_ID":      task.ID,
+		"MULTICA_ISSUE_ID":     task.IssueID,
 		"MULTICA_TASK_SLOT":    strconv.Itoa(slot),
 		"TMPDIR":               tempDir,
 		"TMP":                  tempDir,
@@ -2184,6 +2185,7 @@ func (d *Daemon) run(ctx context.Context, healthLn net.Listener) error {
 	go d.taskWakeupLoop(ctx, taskWakeups)
 	go d.heartbeatLoop(ctx)
 	go d.gcLoop(ctx)
+	go d.acceptanceCleanupLoop(ctx)
 	go d.autoUpdateLoop(ctx)
 	go d.tokenRenewalLoop(ctx)
 	go d.environments.run(ctx)
@@ -5773,6 +5775,14 @@ func (d *Daemon) handleTask(ctx context.Context, task Task, slot int) {
 	// a millisecond timestamp that only advances every ~65s, so concurrent
 	// tasks routinely share one (#7326).
 	taskLog := d.logger.With("task", task.ID)
+	if task.IssueID != "" && d.cfg.AcceptanceCleanupCommand != "" {
+		// Cleanup can take minutes. Keep this claimed task's prepare lease
+		// alive until it can enter the issue, before any workspace is touched.
+		stopLease := d.startTaskPrepareLeaseExtender(ctx, task, taskLog)
+		release := d.markActiveEnvRoot(d.acceptanceGuard(task.WorkspaceID, task.IssueID))
+		stopLease()
+		defer release()
+	}
 	phaseRecorder := newTaskPhaseRecorder(taskLog.With("task_id", task.ID, "runtime_id", task.RuntimeID), time.Now)
 	ctx = withTaskPhaseRecorder(ctx, phaseRecorder)
 	phaseRecorder.Mark(taskPhaseClaimed)

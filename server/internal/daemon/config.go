@@ -114,6 +114,7 @@ type Config struct {
 	WorkspacesRoot                 string                // base path for execution envs (default: ~/multica_workspaces)
 	HealthPort                     int                   // local HTTP port for health checks (default: 19514)
 	MaxConcurrentTasks             int                   // max tasks running in parallel (default: 20)
+	AcceptanceCleanupCommand       string                // optional executable for ticket-owned Docker cleanup
 	GCEnabled                      bool                  // enable periodic workspace garbage collection (default: true)
 	GCInterval                     time.Duration         // how often the GC loop runs (default: 2h)
 	GCTTL                          time.Duration         // clean dirs whose issue is done/cancelled and updated_at < now()-TTL (default: 24h)
@@ -654,6 +655,7 @@ func LoadConfig(overrides Overrides) (Config, error) {
 		Profile:                         profile,
 		Agents:                          agents,
 		WorkspacesRoot:                  workspacesRoot,
+		AcceptanceCleanupCommand:        os.Getenv("MULTICA_ACCEPTANCE_CLEANUP_COMMAND"),
 		GCEnabled:                       gcEnabled,
 		GCInterval:                      gcInterval,
 		GCTTL:                           gcTTL,

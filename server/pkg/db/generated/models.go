@@ -960,6 +960,7 @@ type Issue struct {
 	TriageState        pgtype.Text        `json:"triage_state"`
 	DuplicateOfIssueID pgtype.UUID        `json:"duplicate_of_issue_id"`
 	RequesterUserID    pgtype.UUID        `json:"requester_user_id"`
+	DecisionPolicy     []byte             `json:"decision_policy"`
 }
 
 type IssueChildEvent struct {

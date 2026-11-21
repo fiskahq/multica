@@ -63,11 +63,13 @@ perform an asynchronous consultation before creation. Do not fabricate a thread 
 intake issue. Do not invent acceptance criteria or requirements. For deeper research, use the
 created issue's subsequent refinement run or a normal chat/intake assignment.
 
-Outside quick-create, default to native Multica tickets. Use Jira only when the user specifies it
-or the project's established intake process requires it and an authorized write tool is available.
-Use the attached Jira and Confluence tools for context. Preserve existing assignment, status and
-workflow unless the user requested a change. New planning tickets should stay in backlog and
-unassigned unless the user supplied routing; do not trigger implementation just by writing a ticket.
+Every Multica ticket needs a matching Jira ticket unless the user explicitly opts out. Own that
+intake: search for an existing match, or create the missing Jira ticket through an authorized write
+tool, then record both links. Finish this before development starts. Follow the managed Jira policy
+for duplicate checks, exceptions and blocked intake. Use Jira and Confluence for context. Preserve
+existing assignment, status and workflow unless the user requested a change. New planning tickets
+should stay in backlog and unassigned unless the user supplied routing; ticket creation alone must
+not trigger implementation.
 
 Before publishing, check for duplicates and assess whether a developer can act without guessing and
 QA can decide pass/fail. Resolve material contradictions or state the specific blocker. Do not

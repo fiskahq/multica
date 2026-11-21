@@ -94,10 +94,15 @@ console.log(JSON.stringify({ data: { id: server.id, name: server.name, transport
   const servers = JSON.parse(readFileSync(database, "utf8"));
   assert.equal(servers.length, 2);
   assert.deepEqual(servers[0], foreign);
-  assert.deepEqual(servers[1].spec, {
-    type: "http",
-    url: "http://127.0.0.1:8090/mcp/jira",
-    headers: { Authorization: `Bearer ${token}` },
+  assert.equal(servers[1].spec.command, "python3");
+  assert.equal(servers[1].spec.args[0], "-c");
+  assert.doesNotMatch(
+    JSON.stringify(servers[1].spec.args),
+    /sensitive-endpoint-token/,
+  );
+  assert.deepEqual(servers[1].spec.env, {
+    MULTICA_RELAY_URL: "http://127.0.0.1:8090/mcp/jira",
+    MULTICA_RELAY_HEADERS: JSON.stringify({ Authorization: `Bearer ${token}` }),
   });
   assert.doesNotMatch(
     first.stdout +

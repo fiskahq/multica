@@ -66,6 +66,9 @@ try {
   if (process.argv.slice(2).some((arg) => arg !== "--apply"))
     fail("Use --apply to register endpoints; omit it for a preview.");
   const profile = process.env.MULTICA_PROFILE;
+  const transport = process.env.RELAY_TRANSPORT ?? "stdio";
+  if (!["stdio", "http"].includes(transport))
+    fail("RELAY_TRANSPORT must be stdio or http.");
   const workspaceId = process.env.MULTICA_WORKSPACE_ID;
   if (!profile || !/^[a-f0-9-]{36}$/i.test(workspaceId ?? ""))
     fail("Set MULTICA_PROFILE and MULTICA_WORKSPACE_ID explicitly.");
@@ -119,16 +122,37 @@ try {
     seenTokens.add(token);
     return {
       name: `factory-${endpoint.name.replaceAll("_", "-")}`,
-      spec: {
-        type: "http",
-        url: base.origin + endpoint.path,
-        headers: { Authorization: `Bearer ${token}` },
-      },
+      spec:
+        transport === "http"
+          ? {
+              type: "http",
+              url: base.origin + endpoint.path,
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          : {
+              command: "python3",
+              args: process.env.RELAY_STDIO_BRIDGE
+                ? [process.env.RELAY_STDIO_BRIDGE]
+                : [
+                    "-c",
+                    "import os,runpy; paths=['/opt/agent-tools/relay-stdio.py', '/home/node/.local/lib/multica/relay-stdio.py']; runpy.run_path(next(p for p in paths if os.path.isfile(p)), run_name='__main__')",
+                  ],
+              env: {
+                MULTICA_RELAY_URL: base.origin + endpoint.path,
+                MULTICA_RELAY_HEADERS: JSON.stringify({
+                  Authorization: `Bearer ${token}`,
+                }),
+              },
+            },
     };
   });
   if (
     new Set(entries.map((entry) => entry.name)).size !== entries.length ||
-    new Set(entries.map((entry) => entry.spec.url)).size !== entries.length
+    new Set(
+      entries.map(
+        (entry) => entry.spec.url ?? entry.spec.env.MULTICA_RELAY_URL,
+      ),
+    ).size !== entries.length
   )
     fail("Endpoint names and paths must be unique.");
   mkdirSync(secrets, { recursive: true, mode: 0o700 });
@@ -170,7 +194,7 @@ try {
     const id = state.servers[entry.name];
     if (!apply) {
       console.log(
-        `${id ? "Update" : "Create"} ${entry.name}: ${entry.spec.url}`,
+        `${id ? "Update" : "Create"} ${entry.name}: ${entry.spec.url ?? entry.spec.env.MULTICA_RELAY_URL} (${transport})`,
       );
       continue;
     }

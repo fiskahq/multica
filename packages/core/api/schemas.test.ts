@@ -208,6 +208,16 @@ describe("ChatSessionSchema", () => {
   });
 });
 describe("IssueSchema (via ListIssuesResponseSchema)", () => {
+  it("validates optional decision policy without breaking older issue responses", () => {
+    const policy = { mode: "auto", root_issue_id: "030b99b4-c4b3-4484-84f2-f71d461f0fea", available: true };
+    const parse = (decision_policy?: unknown) => ListIssuesResponseSchema.parse({
+      issues: [{ ...baseIssue, decision_policy }], total: 1,
+    }).issues[0]?.decision_policy;
+    expect(parse(policy)).toEqual(policy);
+    for (const malformed of [undefined, null, {}, { ...policy, mode: "unknown" }, { ...policy, mode: "agent" }, { ...policy, available: "yes" }]) {
+      expect(parse(malformed)).toBeUndefined();
+    }
+  });
   // A custom status key can be derived rather than readable — "客户确认" becomes
   // `in_review_2` — so the display name travels with it. The field has to
   // survive a server that predates it, since an issue that fails validation

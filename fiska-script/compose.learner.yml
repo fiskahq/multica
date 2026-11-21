@@ -1,0 +1,23 @@
+services:
+  learner:
+    profiles: [learner]
+    image: python:3.12-slim
+    init: true
+    restart: unless-stopped
+    user: "${LEARNER_UID:-1000}:${LEARNER_GID:-1000}"
+    command: [python3, -B, /app/service.py, serve]
+    volumes:
+      - ${LEARNER_SOURCE_DIR:-./learner}:/app:ro
+      - ./learner-private/config.json:/run/learner/config.json:ro
+      - ./learner-private/data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=32m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    cpus: 0.5
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: "3" }

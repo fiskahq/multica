@@ -157,6 +157,24 @@ restrictions are enforced by the service adapter, command definition, upstream, 
 
 ## Jira and GitHub
 
+Jira calls releases **project versions**. Both `jira__request` and `jira_triage__request`
+can find them using the [project versions API](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-project-versions/):
+
+```json
+{
+  "path": "/rest/api/3/project/MS/version",
+  "query": { "status": "unreleased", "startAt": 0, "maxResults": 50 }
+}
+```
+
+Add `query.query` to filter by a release-name fragment. Omit `status` to include all statuses.
+Read `values`, then advance `startAt` by the returned count until `isLast` is true; stop and report
+an incomplete result if a non-final page is empty. Read details with
+`GET /rest/api/3/version/ID`. Use `jira__request` issue search with
+`query.jql: "project = MS AND fixVersion = ID"` to find the release's tickets.
+The Jira tool returns the response directly; the triage tool wraps it in `data`.
+Release lookup does not require write access. The triage endpoint still rejects release mutations.
+
 Copy the `jira` and/or `github` objects from
 [examples/integrations.json](examples/integrations.json) into `config.json`. On the host, use the
 factory's existing authentication to create the mounted credential files:
@@ -431,3 +449,19 @@ No test sends external mail, changes Jira/GitHub, or connects to a production da
 For host development, set paths in a separate local configuration to writable host paths and set
 `RELAY_CONFIG=/absolute/path/to/config.json` before `npm run dev`. The Docker configuration uses
 container paths. Tool logs contain tool name, success/failure and duration, not arguments or tokens.
+
+### Docker agent transport and collaboration roles
+
+Docker registrations use the Python `../relay-stdio.py` adapter by default because Kiro v3 can
+report HTTP/SSE MCP as unsupported. The adapter forwards JSON MCP to the same scoped HTTP endpoint,
+keeps credentials in environment configuration, rejects redirects and never retries uncertain writes.
+The runtime image includes it at `/opt/agent-tools/relay-stdio.py`; existing runtimes use the installed
+fallback `/home/node/.local/lib/multica/relay-stdio.py`. For a host runtime, set
+`RELAY_TRANSPORT=http` when HTTP is supported, or set `RELAY_STDIO_BRIDGE` to the installed adapter path.
+
+The [release example](examples/jira-release.json) is separate from the ticket writer. It permits
+version creation, updates and reordering, including release/archive flags. Deletion and merging
+remain denied. `../setup-collaboration-tools.sh` registers this endpoint and attaches it, together
+with the existing Confluence writer, only to Guy, Architect and development-release. Other agents
+can request these actions through those roles. The connected account must also have permission in
+Jira or Confluence. The installer requires the dedicated Confluence writer to be configured first.

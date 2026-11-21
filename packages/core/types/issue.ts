@@ -184,6 +184,15 @@ export interface IssueDuplicateOf {
 }
 
 export interface Issue {
+  decision_policy?: {
+    mode: "human" | "auto" | "agent";
+    root_issue_id: string;
+    agent_id?: string;
+    agent_name?: string;
+    configured_by?: string;
+    comment_id?: string;
+    available: boolean;
+  };
   id: string;
   workspace_id: string;
   number: number;

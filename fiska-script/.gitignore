@@ -4,6 +4,8 @@ backups/
 agent-state.json
 architect-state.json
 advisor-state.json
+learner-state.json
+learner-private/
 .agent-state-*
 __pycache__/
 agents.json
@@ -12,7 +14,12 @@ migration-state.json
 qa-state.json
 relay-state.json
 confluence-write-state.json
+collaboration-tools-state.json
 .relay-import-*/
 wizard-state.json
 wizard-relay-state.json
 .wizard-*
+transcript-state.json
+transcript-private/
+transcript-inbox/
+jira-done-private/

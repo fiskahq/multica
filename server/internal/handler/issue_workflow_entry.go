@@ -363,6 +363,13 @@ func (h *Handler) claimProjectWorkflow(ctx context.Context, issue db.Issue, task
 		return nil
 	}
 	if def == nil || (def.IsDefault && !def.HandsOffAnywhere()) {
+		policy, _, err := h.effectiveDecisionPolicy(ctx, issue)
+		if err != nil {
+			return &TaskProjectWorkflowData{Brief: h.decisionPolicyBrief(ctx, issue, task)}
+		}
+		if policy.CommentID != "" {
+			return &TaskProjectWorkflowData{Brief: h.decisionPolicyBrief(ctx, issue, task)}
+		}
 		return nil
 	}
 	in := h.workflowBriefInput(ctx, issue, *def, project)
@@ -377,7 +384,7 @@ func (h *Handler) claimProjectWorkflow(ctx context.Context, issue db.Issue, task
 			in.AssigneeName = h.actorDisplayName(ctx, issue.WorkspaceID, issue.AssigneeType.String, issue.AssigneeID)
 		}
 	}
-	return &TaskProjectWorkflowData{Brief: issueworkflow.Brief(in), stepMoved: stepMoved}
+	return &TaskProjectWorkflowData{Brief: issueworkflow.Brief(in) + h.decisionPolicyBrief(ctx, issue, task), stepMoved: stepMoved}
 }
 
 // taskRunsForAssignee reports whether a run works on the issue as its

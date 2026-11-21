@@ -124,3 +124,25 @@ grep -q -- '--profile relay --profile runtime --profile qa stop' "$TEST_DOCKER_L
 bash update.sh >/dev/null
 grep -q 'build --pull --no-cache backend runtime qa-docker mcp-relay' "$TEST_DOCKER_LOG"
 printf 'PASS: enabled relay starts with the app, stops with the stack, and is rebuilt on update\n'
+
+mkdir -p transcript-private
+printf '{}\n' > transcript-private/config.json
+: > "$TEST_DOCKER_LOG"
+bash sandbox.sh start-runtime >/dev/null
+grep -q -- '--profile transcripts' "$TEST_DOCKER_LOG"
+grep -q 'up -d --no-deps transcript-intake' "$TEST_DOCKER_LOG"
+bash sandbox.sh stop >/dev/null
+grep -q -- '--profile transcripts --profile runtime --profile qa stop' "$TEST_DOCKER_LOG"
+printf 'PASS: installed transcript worker participates in runtime start and stack stop\n'
+
+mkdir -p jira-done-private
+touch jira-done-private/config.json
+: > "$TEST_DOCKER_LOG"
+bash sandbox.sh start >/dev/null
+grep -q -- 'up -d --no-deps jira-done' "$TEST_DOCKER_LOG"
+: > "$TEST_DOCKER_LOG"
+bash sandbox.sh start-runtime >/dev/null
+grep -q -- 'up -d --no-deps jira-done' "$TEST_DOCKER_LOG"
+bash sandbox.sh stop >/dev/null
+grep -q -- '--profile jira-done --profile runtime --profile qa stop' "$TEST_DOCKER_LOG"
+printf 'PASS: Jira Done sync starts with app/runtime and participates in stack stop\n'

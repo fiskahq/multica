@@ -12,6 +12,9 @@ DIRECTORY = ROOT / "mcp-relay/confluence-write"
 spec = importlib.util.spec_from_file_location("provision", ROOT / "provision-agents.py")
 provision = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(provision)
+bridge_spec = importlib.util.spec_from_file_location("relay_stdio", ROOT / "relay-stdio.py")
+relay_stdio = importlib.util.module_from_spec(bridge_spec)
+bridge_spec.loader.exec_module(relay_stdio)
 
 
 def prepare():
@@ -79,8 +82,8 @@ def register():
         raise RuntimeError("Tracked Confluence write registration is missing.")
     if not existing:
         token = (DIRECTORY / ".secrets/token").read_text().strip()
-        config = {"type": "http", "url": "http://confluence-write:8080/mcp/confluence-write",
-                  "headers": {"Authorization": "Bearer " + token}}
+        config = relay_stdio.server_config("http://confluence-write:8080/mcp/confluence-write",
+                                          {"Authorization": "Bearer " + token})
         cli("workspace", "mcp", "add", name, agent["workspace_id"], "--server-config-stdin",
             "--output", "json", data=json.dumps(config))
         servers = cli("workspace", "mcp", "list", agent["workspace_id"], "--output", "json")

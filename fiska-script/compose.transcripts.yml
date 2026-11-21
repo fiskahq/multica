@@ -1,0 +1,24 @@
+services:
+  transcript-intake:
+    profiles: [transcripts]
+    image: python:3.12-slim
+    init: true
+    restart: unless-stopped
+    user: "${TRANSCRIPT_UID:-1000}:${TRANSCRIPT_GID:-1000}"
+    command: [python3, -B, /app/service.py, serve]
+    volumes:
+      - ${TRANSCRIPT_SOURCE_DIR:-./transcripts}:/app:ro
+      - ./transcript-private/config.json:/run/transcripts/config.json:ro
+      - ./transcript-private/data:/data
+      - ./transcript-inbox:/inbox
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=32m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    cpus: 0.5
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}

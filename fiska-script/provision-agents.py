@@ -18,6 +18,28 @@ LOGINS = {"claude_login": ["claude", "auth", "login"], "codex_login": ["codex", 
 LABEL = re.compile(r"[a-z][a-z0-9_-]{0,63}\Z")
 
 
+def jira_instructions(text):
+    policy = (ROOT / "jira-ticket-policy.md").read_text().strip()
+    legacy = ("Outside quick-create, default to native Multica tickets. Use Jira only when the user specifies it\n"
+              "or the project's established intake process requires it and an authorized write tool is available.")
+    text = text.replace(legacy, "Follow the Jira prerequisite below during intake, before development starts.")
+    start, end = "<!-- fiska:jira-ticket-policy:start -->", "<!-- fiska:jira-ticket-policy:end -->"
+    if start in text or end in text:
+        if text.count(start) != 1 or text.count(end) != 1 or text.index(end) < text.index(start):
+            raise RuntimeError("Malformed managed Jira policy; reconcile before retrying.")
+        # Do not silently overwrite a policy someone edited in Multica.
+        if text[text.index(start):text.index(end) + len(end)] != policy:
+            raise RuntimeError("Managed Jira policy was modified; reconcile before retrying.")
+    else:
+        text = text.rstrip() + ("\n\n" if text.strip() else "") + policy
+    access = (ROOT / "collaboration-tools-policy.md").read_text().strip()
+    if access not in text:
+        if "## Jira and Confluence task access" in text:
+            raise RuntimeError("Connected tool policy was modified; reconcile before retrying.")
+        text = text.rstrip() + "\n\n" + access
+    return text
+
+
 def agent_concurrency(name, default=None):
     policy = json.loads((ROOT / "concurrency-policy.json").read_text())
     limit = policy["agents"].get(name, policy["default_agent_limit"] if default is None else default)
@@ -174,6 +196,7 @@ def provision(config, state_path):
             instructions = spec.get("instructions", "")
             if index == 0:
                 instructions += "\nCoordinate the squad using its worker pool. Codex CLI is available as a tool via codex exec; Claude is your primary provider. Delegate implementation to the pool and review results."
+            instructions = jira_instructions(instructions)
             extra = ["--custom-args", json.dumps(["--agent-engine", "v3"])] if provider == "kiro" else []
             limit = agent_concurrency(name, default=10 if index == 0 else 1)
             agent = bridge("agent", "create", "--name", name, "--runtime-id", runtime_ids[provider], "--instructions", instructions, "--max-concurrent-tasks", str(limit), *extra, "--output", "json")
