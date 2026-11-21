@@ -1,0 +1,28 @@
+services:
+  jira-done:
+    profiles: [jira-done]
+    image: python:3.12-slim
+    init: true
+    restart: unless-stopped
+    user: "${JIRA_DONE_UID:-1000}:${JIRA_DONE_GID:-1000}"
+    command: [python3, -B, /app/service.py, serve]
+    volumes:
+      - ./jira-done:/app:ro
+      - ./jira-done-private/config.json:/run/jira-done/config.json:ro
+      - ./jira-done-private/data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 32
+    cpus: 0.25
+    mem_limit: 128m
+    healthcheck:
+      test: [CMD, python3, -c, "import pathlib,time; p=pathlib.Path('/data/heartbeat'); assert p.exists() and time.time()-p.stat().st_mtime<300"]
+      interval: 30s
+      timeout: 5s
+      start_period: 90s
+    logging:
+      driver: json-file
+      options: { max-size: 5m, max-file: "3" }

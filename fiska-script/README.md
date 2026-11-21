@@ -873,6 +873,60 @@ Run `bash cleanup-docker.test.sh` to verify cleanup scope and retention guards w
 
 ## Manage
 
+### Finish linked Jira tickets
+
+Run `./setup-jira-done.sh` once after configuring the Jira relay. `setup-delivery.sh` also installs
+it when a relay is configured. This starts a small independent `jira-done` container; it does not
+restart the API or agents. On first start it records the existing issue statuses without closing
+older Done tickets. Later moves to Done are checked every 30 seconds and survive worker restarts.
+
+The worker assigns the primary linked Jira ticket to **David Bernard**, then uses the available
+successful completion transition and Done/Fixed resolution. It verifies both assignment and
+completion by reading Jira back. It does not choose cancellation/abandonment transitions, invent
+required field values, merge PRs, deploy, or reopen Jira when Multica is reopened. Set another
+assignee with `./setup-jira-done.sh install --assignee 'Exact Jira display name'`.
+
+When several Multica tickets share a Jira key, **all must be Done** before Jira closes. Cancelled
+or blocked linked work does not count as completed. A user can explicitly waive this for a named
+Multica ticket. Record the authorization with:
+
+```bash
+./setup-jira-done.sh allow-shared-close FISK-123 --reason 'David authorized early Jira closure in ...'
+./setup-jira-done.sh revoke-shared-close FISK-123
+./setup-jira-done.sh status
+./setup-jira-done.sh retry
+```
+
+Exceptions live in the private operator configuration, not agent-editable issue metadata. They
+persist for that issue until revoked. Do not grant them on an agent's own initiative. Setup never
+creates Multica or Jira tickets and does not bulk-assign historical issues.
+
+Links must be explicit: `jira_key` issue metadata, `Jira: MS-123`, a primary `Jira:` Markdown link,
+or the first link/key under a Jira heading. Links must target the configured Jira site. Related
+ticket references are not primary mappings, conflicting mappings block, and `Jira: not required`
+is respected. The existing intake owner remains responsible for verified mapping and user exemptions.
+
+The issue's `jira_done_sync` metadata records success, missing links, linked work still open, or
+retry failures. `status` lists these receipts and errors. Retryable failures back off to one hour;
+blocked prerequisites are checked every five minutes. Uncertain writes are always read back before
+another write. The persistent SQLite state and shared-volume lock prevent two worker instances
+from processing the same event concurrently. Do not run copies with independent data directories.
+
+This is eventual synchronization, not a cross-service atomic transaction. The worker rereads the
+issue and known linked peers immediately before writes; Jira and Multica can still change during
+an API call. Brief moves out of Done and back between polls may not be observed. Full workspace
+scan access is required to enforce the shared-ticket rule; keep the owner credential configured.
+Missing access or workflow fields remain visible rather than being treated as completion. Rerun
+setup after rotating Multica or relay credentials. Preserve `jira-done-private/data` during updates.
+
+Validation: `python3 jira-done/service_test.py` runs local logic and real HTTP fixture tests, including
+committed writes with lost replies. Fixtures model the observed Jira Complete Ticket transition
+and the documented [Jira issue APIs](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/).
+They prove client/state behavior, not Jira permissions or arbitrary project workflows. No real Jira
+ticket is changed by tests.
+
+### Stack commands
+
 ```bash
 ./sandbox.sh status
 ./sandbox.sh logs -f backend

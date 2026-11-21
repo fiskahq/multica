@@ -18,3 +18,6 @@ python3 "$MULTICA_SETUP_DIR/configure-delivery-branches.py"
 python3 "$MULTICA_SETUP_DIR/configure-jira-policy.py"
 python3 "$MULTICA_SETUP_DIR/configure-qa-policy.py"
 bash "$MULTICA_SETUP_DIR/setup-factory-policy.sh"
+if [[ -f "$MULTICA_SETUP_DIR/relay-state.json" ]]; then
+  bash "$MULTICA_SETUP_DIR/setup-jira-done.sh"
+fi

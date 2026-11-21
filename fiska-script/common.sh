@@ -49,6 +49,11 @@ compose() {
     extra+=(-f "$MULTICA_SETUP_DIR/compose.transcripts.yml")
     profiles+=(--profile transcripts)
   fi
+  if [[ -f "$MULTICA_SETUP_DIR/jira-done-private/config.json" ]]; then
+    extra+=(-f "$MULTICA_SETUP_DIR/compose.jira-done.yml")
+    profiles+=(--profile jira-done)
+  fi
+  JIRA_DONE_UID="${JIRA_DONE_UID:-$(id -u)}" JIRA_DONE_GID="${JIRA_DONE_GID:-$(id -g)}" \
   TRANSCRIPT_UID="${TRANSCRIPT_UID:-$(id -u)}" TRANSCRIPT_GID="${TRANSCRIPT_GID:-$(id -g)}" \
   LEARNER_UID="${LEARNER_UID:-$(id -u)}" LEARNER_GID="${LEARNER_GID:-$(id -g)}" \
   docker compose --project-name "${MULTICA_PROJECT_NAME:-multica-sandbox}" \
@@ -68,8 +73,15 @@ start_relay() {
 start_app() {
   start_relay
   compose up -d --wait --wait-timeout 360 "$@" postgres backend frontend
+  start_jira_done
   printf '\nFrontend: http://%s\n' "$(compose port frontend 3000)"
   printf 'Backend:  http://%s\n' "$(compose port backend 8080)"
+}
+
+start_jira_done() {
+  if [[ -f "$MULTICA_SETUP_DIR/jira-done-private/config.json" ]]; then
+    compose up -d --no-deps jira-done
+  fi
 }
 
 start_runtime() {
@@ -86,6 +98,7 @@ start_runtime() {
   if [[ -f "$MULTICA_SETUP_DIR/transcript-private/config.json" ]]; then
     compose up -d --no-deps transcript-intake
   fi
+  start_jira_done
 }
 
 set_build_metadata() {

@@ -134,3 +134,15 @@ grep -q 'up -d --no-deps transcript-intake' "$TEST_DOCKER_LOG"
 bash sandbox.sh stop >/dev/null
 grep -q -- '--profile transcripts --profile runtime --profile qa stop' "$TEST_DOCKER_LOG"
 printf 'PASS: installed transcript worker participates in runtime start and stack stop\n'
+
+mkdir -p jira-done-private
+touch jira-done-private/config.json
+: > "$TEST_DOCKER_LOG"
+bash sandbox.sh start >/dev/null
+grep -q -- 'up -d --no-deps jira-done' "$TEST_DOCKER_LOG"
+: > "$TEST_DOCKER_LOG"
+bash sandbox.sh start-runtime >/dev/null
+grep -q -- 'up -d --no-deps jira-done' "$TEST_DOCKER_LOG"
+bash sandbox.sh stop >/dev/null
+grep -q -- '--profile jira-done --profile runtime --profile qa stop' "$TEST_DOCKER_LOG"
+printf 'PASS: Jira Done sync starts with app/runtime and participates in stack stop\n'
